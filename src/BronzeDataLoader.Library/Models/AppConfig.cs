@@ -1,3 +1,4 @@
+using System.Text;
 using DuckDB.NET.Data;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -48,12 +49,13 @@ public record AppConfig
             throw new FileNotFoundException($"Configuration file not found: {yamlPath}", yamlPath);
 
         var yaml = File.ReadAllText(yamlPath);
+        var normalizedYaml = NormalizeQuotedYamlStrings(yaml);
 
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .Build();
 
-        var rawConfig = deserializer.Deserialize<AppConfigRaw>(yaml);
+        var rawConfig = deserializer.Deserialize<AppConfigRaw>(normalizedYaml);
 
         var configDir = Path.GetDirectoryName(Path.GetFullPath(yamlPath)) ?? ".";
 
@@ -86,6 +88,42 @@ public record AppConfig
             SchemaQuarantine = rawConfig.SchemaQuarantine ?? "bronze_quarantine",
             Connection = conn,
         };
+    }
+
+    private static string NormalizeQuotedYamlStrings(string yaml)
+    {
+        var builder = new StringBuilder(yaml.Length);
+        var inSingleQuotedScalar = false;
+        var inDoubleQuotedScalar = false;
+
+        for (var i = 0; i < yaml.Length; i++)
+        {
+            var current = yaml[i];
+
+            if (current == '\'' && !inDoubleQuotedScalar)
+            {
+                inSingleQuotedScalar = !inSingleQuotedScalar;
+                builder.Append(current);
+                continue;
+            }
+
+            if (current == '"' && !inSingleQuotedScalar)
+            {
+                inDoubleQuotedScalar = !inDoubleQuotedScalar;
+                builder.Append(current);
+                continue;
+            }
+
+            if (current == '\\' && inDoubleQuotedScalar)
+            {
+                builder.Append("\\\\");
+                continue;
+            }
+
+            builder.Append(current);
+        }
+
+        return builder.ToString();
     }
 
     private static string ResolvePath(string path, string configDir)

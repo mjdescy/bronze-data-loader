@@ -46,6 +46,39 @@ schema_quarantine: "bronze_quarantine"
     }
 
     [Fact]
+    public void FromYaml_WindowsStyleBackslashesInQuotedPaths_AreParsed()
+    {
+        var yaml = """
+manifest_path: "manifest\file.csv"
+data_folder: "nested\folder"
+contracts_folder: "contracts\sub"
+output_folder: "output\sub"
+database_path: ":memory:"
+""";
+
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        var yamlPath = Path.Combine(dir, "config.yaml");
+
+        try
+        {
+            File.WriteAllText(yamlPath, yaml);
+
+            var appConfig = Models.AppConfig.FromYaml(yamlPath);
+
+            Assert.Contains("manifest\\file.csv", appConfig.ManifestPath);
+            Assert.Contains("nested\\folder", appConfig.DataFolder);
+            Assert.Contains("contracts\\sub", appConfig.ContractsFolder);
+            Assert.Contains("output\\sub", appConfig.OutputFolder);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FromYaml_MissingFile_ThrowsFileNotFoundException()
     {
         var path = "/path/does/not/exist/config.yaml";
