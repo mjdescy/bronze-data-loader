@@ -34,7 +34,9 @@ public record ManifestEntry
         if (!Directory.Exists(sourceFolder))
             throw new DirectoryNotFoundException($"Source folder does not exist: {sourceFolder}");
 
-        return Directory.GetFiles(sourceFolder, FilePattern, SearchOption.AllDirectories);
+        return Directory.GetFiles(sourceFolder, FilePattern, SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     /// <summary>
