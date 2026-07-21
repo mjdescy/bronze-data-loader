@@ -452,6 +452,225 @@ columns:
         }
     }
 
+    [Fact]
+    public void GenerateSqlMode_ProducesFilesInOutputFolder()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            // Contract
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: t
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    type: VARCHAR
+    required: true
+  - canonical: name
+    accepts: [name]
+    type: VARCHAR
+    required: false
+""");
+
+            // Source data
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            File.WriteAllText(Path.Combine(dataDir, "d.csv"), "id,name\n1,alice\n2,bob\n");
+
+            // Manifest
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,d.csv,c.yaml\n");
+
+            // Output folder
+            var outputDir = Path.Combine(testDir, "output");
+            Directory.CreateDirectory(outputDir);
+
+            // Config
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{outputDir}\"\ndatabase_path: \":memory:\"\n");
+
+            // Execute pipeline in generate-sql mode (simulate what CLI does)
+            var appConfig = AppConfig.FromYaml(configPath);
+
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+
+                var allStatements = new List<SqlStatement>();
+                var seenSchemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var sourceFile in sourceFiles)
+                {
+                    // Load raw data so DESCRIBE works
+                    sourceFile.GenerateRawLoad(appConfig);
+
+                    // Collect statements
+                    var statements = sourceFile.CollectSqlStatements(appConfig);
+
+                    // Deduplicate schemas
+                    foreach (var stmt in statements)
+                    {
+                        if (stmt.Operation == "create_schema")
+                        {
+                            if (!seenSchemas.Add(stmt.ObjectName))
+                                continue;
+                        }
+                        allStatements.Add(stmt);
+                    }
+                }
+
+                // Write SQL files
+                Assert.NotEmpty(allStatements);
+
+                var ordinal = 1;
+                foreach (var stmt in allStatements)
+                {
+                    var fileName = $"{ordinal:D3}_{stmt.Operation}_{stmt.ObjectName}.sql";
+                    var filePath = Path.Combine(outputDir, fileName);
+                    File.WriteAllText(filePath, stmt.Sql + "\n");
+                    ordinal++;
+                }
+
+                // Verify files
+                var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
+
+                // Should have: 3 schema files + 1 table file + 1 view file = 5 files
+                Assert.Equal(5, sqlFiles.Length);
+
+                // Verify ordering and naming
+                Assert.StartsWith("001_create_schema_bronze_raw", Path.GetFileName(sqlFiles[0]));
+                Assert.StartsWith("002_create_schema_bronze", Path.GetFileName(sqlFiles[1]));
+                Assert.StartsWith("003_create_schema_bronze_quarantine", Path.GetFileName(sqlFiles[2]));
+                Assert.StartsWith("004_create_table_t_Test_", Path.GetFileName(sqlFiles[3]));
+                Assert.StartsWith("005_create_view_t_Test_", Path.GetFileName(sqlFiles[4]));
+
+                // Verify SQL content
+                var tableSql = File.ReadAllText(sqlFiles[3]);
+                Assert.Contains("CREATE OR REPLACE TABLE", tableSql);
+                Assert.Contains("read_csv(", tableSql);
+
+                var viewSql = File.ReadAllText(sqlFiles[4]);
+                Assert.Contains("CREATE OR REPLACE VIEW", viewSql);
+                Assert.Contains("SELECT", viewSql);
+                Assert.Contains("FROM", viewSql);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GenerateSqlMode_QuarantineFile_ProducesQuarantineFiles()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            // Contract with required column not in source
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: t
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    type: VARCHAR
+    required: true
+  - canonical: required_col
+    accepts: [required_col]
+    type: VARCHAR
+    required: true
+""");
+
+            // Source missing required_col
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            File.WriteAllText(Path.Combine(dataDir, "bad.csv"), "id\n1\n");
+
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,bad.csv,c.yaml\n");
+
+            var outputDir = Path.Combine(testDir, "output");
+            Directory.CreateDirectory(outputDir);
+
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{outputDir}\"\ndatabase_path: \":memory:\"\n");
+
+            var appConfig = AppConfig.FromYaml(configPath);
+
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+
+                var allStatements = new List<SqlStatement>();
+                var seenSchemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var sourceFile in sourceFiles)
+                {
+                    sourceFile.GenerateRawLoad(appConfig);
+                    var statements = sourceFile.CollectSqlStatements(appConfig);
+
+                    foreach (var stmt in statements)
+                    {
+                        if (stmt.Operation == "create_schema")
+                        {
+                            if (!seenSchemas.Add(stmt.ObjectName))
+                                continue;
+                        }
+                        allStatements.Add(stmt);
+                    }
+                }
+
+                var ordinal = 1;
+                foreach (var stmt in allStatements)
+                {
+                    var fileName = $"{ordinal:D3}_{stmt.Operation}_{stmt.ObjectName}.sql";
+                    var filePath = Path.Combine(outputDir, fileName);
+                    File.WriteAllText(filePath, stmt.Sql + "\n");
+                    ordinal++;
+                }
+
+                var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
+
+                // Should have: 3 schema + 1 table + 1 quarantine_view + 1 quarantine_log = 6
+                Assert.Equal(6, sqlFiles.Length);
+
+                // Verify quarantine view file exists
+                Assert.Contains("create_quarantine_view", sqlFiles[4]);
+                Assert.Contains("insert_quarantine_log", sqlFiles[5]);
+
+                var quarantineViewSql = File.ReadAllText(sqlFiles[4]);
+                Assert.Contains("CREATE OR REPLACE VIEW", quarantineViewSql);
+                Assert.Contains("bronze_quarantine", quarantineViewSql);
+
+                var logSql = File.ReadAllText(sqlFiles[5]);
+                Assert.Contains("INSERT INTO", logSql);
+                Assert.Contains("_quarantine_log", logSql);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
     // ===== Helpers =====
 
     private static string[] GetTableNames(DuckDBConnection conn, string schema)

@@ -1,5 +1,6 @@
 using CommandLine;
 using BronzeDataLoader.Library.Models;
+using BronzeDataLoader.Library.Sql;
 
 // ReSharper disable once RedundantUsingDirective
 using SysConsole = System.Console;
@@ -95,17 +96,63 @@ static int RunLoad(LoadOptions opts)
             var manifest = Manifest.FromCsv(appConfig.ManifestPath);
             var sourceFiles = manifest.ToSourceFileList(appConfig);
 
+            // Collect all SQL statements across all source files
+            var allStatements = new List<SqlStatement>();
+            var seenSchemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var sourceFile in sourceFiles)
             {
                 try
                 {
-                    sourceFile.GenerateAndExecuteSql(appConfig);
-                    SysConsole.WriteLine($"Processed {sourceFile.FilePath} successfully.");
+                    if (opts.GenerateSql)
+                    {
+                        // Generate mode: load raw data so DESCRIBE works, capture all SQL
+                        sourceFile.GenerateRawLoad(appConfig);
+                        var statements = sourceFile.CollectSqlStatements(appConfig);
+
+                        // Deduplicate schema statements across source files
+                        foreach (var stmt in statements)
+                        {
+                            if (stmt.Operation == "create_schema")
+                            {
+                                if (!seenSchemas.Add(stmt.ObjectName))
+                                    continue;
+                            }
+                            allStatements.Add(stmt);
+                        }
+
+                        SysConsole.WriteLine($"Collected SQL for {sourceFile.FilePath}.");
+                    }
+                    else
+                    {
+                        // Normal mode: execute against DuckDB
+                        sourceFile.GenerateAndExecuteSql(appConfig);
+                        SysConsole.WriteLine($"Processed {sourceFile.FilePath} successfully.");
+                    }
                 }
                 catch (Exception ex)
                 {
                     SysConsole.WriteLine($"Error processing {sourceFile.FilePath}: {ex.Message}");
                 }
+            }
+
+            // Write SQL files if in generate mode
+            if (opts.GenerateSql && allStatements.Count > 0)
+            {
+                var outputFolder = appConfig.OutputFolder;
+                if (!Directory.Exists(outputFolder))
+                    Directory.CreateDirectory(outputFolder);
+
+                var ordinal = 1;
+                foreach (var stmt in allStatements)
+                {
+                    var fileName = $"{ordinal:D3}_{stmt.Operation}_{stmt.ObjectName}.sql";
+                    var filePath = Path.Combine(outputFolder, fileName);
+                    File.WriteAllText(filePath, stmt.Sql + "\n");
+                    ordinal++;
+                }
+
+                SysConsole.WriteLine($"Generated {allStatements.Count} SQL files in {outputFolder}");
             }
         }
 
@@ -188,4 +235,7 @@ public class LoadOptions
 {
     [Value(0, MetaName = "config", Required = true, HelpText = "Path to the YAML configuration file.")]
     public string? ConfigPath { get; set; }
+
+    [Option('g', "generate-sql", Required = false, HelpText = "Generate .sql files for each statement instead of executing against the database.")]
+    public bool GenerateSql { get; set; }
 }

@@ -53,6 +53,23 @@ public record SourceFile
     }
 
     /// <summary>
+    /// Execute only the raw data loading (schema creation + table import),
+    /// without creating views or quarantine. Used by --generate-sql mode
+    /// to populate the database so that DESCRIBE works for SQL collection.
+    /// </summary>
+    /// <param name="appConfig">Application configuration with an open DuckDB connection.</param>
+    public void GenerateRawLoad(AppConfig appConfig)
+    {
+        var connection = appConfig.Connection
+            ?? throw new InvalidOperationException("AppConfig.Connection is not initialized");
+
+        var sqlGenerator = new SqlGenerator(FilePath, Submitter, Contract, connection);
+
+        ExecuteNonQuery(connection, sqlGenerator.BuildCreateSchemaIfNotExists());
+        ExecuteNonQuery(connection, sqlGenerator.BuildRawLoadSql());
+    }
+
+    /// <summary>
     /// Generate the bronze view SQL without executing it.
     /// </summary>
     /// <param name="appConfig">Application configuration.</param>
@@ -64,6 +81,21 @@ public record SourceFile
 
         var sqlGenerator = new SqlGenerator(FilePath, Submitter, Contract, connection);
         return sqlGenerator.BuildBronzeViewSql();
+    }
+
+    /// <summary>
+    /// Collect all SQL statements generated for this source file as individual
+    /// <see cref="SqlStatement"/> records suitable for writing to .sql files.
+    /// </summary>
+    /// <param name="appConfig">Application configuration with an open DuckDB connection.</param>
+    /// <returns>A list of <see cref="SqlStatement"/>.</returns>
+    public List<SqlStatement> CollectSqlStatements(AppConfig appConfig)
+    {
+        var connection = appConfig.Connection
+            ?? throw new InvalidOperationException("AppConfig.Connection is not initialized");
+
+        var sqlGenerator = new SqlGenerator(FilePath, Submitter, Contract, connection);
+        return sqlGenerator.CollectStatements();
     }
 
     private static void ExecuteNonQuery(DuckDBConnection connection, string sql)

@@ -6,6 +6,14 @@ using BronzeDataLoader.Library.Contract;
 namespace BronzeDataLoader.Library.Sql;
 
 /// <summary>
+/// A single SQL statement with metadata for file generation.
+/// </summary>
+/// <param name="Operation">The operation type (e.g. "create_schema", "create_table", "create_view", "quarantine_view", "quarantine_log").</param>
+/// <param name="ObjectName">The sanitized object name for filename construction.</param>
+/// <param name="Sql">The SQL statement text.</param>
+public record SqlStatement(string Operation, string ObjectName, string Sql);
+
+/// <summary>
 /// Generates SQL statements for DuckDB based on a contract and source file.
 /// </summary>
 /// <param name="FilePath">Full path to the source data file.</param>
@@ -248,5 +256,45 @@ public class SqlGenerator(
         var metadataSql = $"INSERT INTO \"bronze_quarantine\".\"_quarantine_log\" (table_name, error_message)\nVALUES ('{rawTable}', '{safeError}');";
 
         return (quarantineSql, metadataSql);
+    }
+
+    /// <summary>
+    /// Collect all SQL statements that would be generated for this source file.
+    /// Schema statements are returned individually (not batched).
+    /// </summary>
+    /// <returns>A list of <see cref="SqlStatement"/> with operation metadata.</returns>
+    public List<SqlStatement> CollectStatements()
+    {
+        var statements = new List<SqlStatement>();
+
+        // Individual schema creation statements
+        var staging = SanitizeIdentifier(Contract.Schema.Staging);
+        var valid = SanitizeIdentifier(Contract.Schema.Valid);
+        var invalid = SanitizeIdentifier(Contract.Schema.Invalid);
+
+        statements.Add(new SqlStatement("create_schema", staging,
+            $"CREATE SCHEMA IF NOT EXISTS \"{staging}\";"));
+        statements.Add(new SqlStatement("create_schema", valid,
+            $"CREATE SCHEMA IF NOT EXISTS \"{valid}\";"));
+        statements.Add(new SqlStatement("create_schema", invalid,
+            $"CREATE SCHEMA IF NOT EXISTS \"{invalid}\";"));
+
+        // Raw table import
+        statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));
+
+        // View or quarantine — these need DESCRIBE data so raw load must have happened
+        try
+        {
+            var (viewSql, _) = BuildBronzeViewSql();
+            statements.Add(new SqlStatement("create_view", SafeTablePart, viewSql));
+        }
+        catch (InvalidOperationException ex)
+        {
+            var (quarantineSql, metadataSql) = BuildQuarantineSql(ex.Message);
+            statements.Add(new SqlStatement("create_quarantine_view", SafeTablePart, quarantineSql));
+            statements.Add(new SqlStatement("insert_quarantine_log", SafeTablePart, metadataSql));
+        }
+
+        return statements;
     }
 }

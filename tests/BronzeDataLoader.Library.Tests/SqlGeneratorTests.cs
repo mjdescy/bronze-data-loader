@@ -700,6 +700,91 @@ public class SqlGeneratorTests
         }
     }
 
+    // ===== CollectStatements Tests =====
+
+    public class CollectStatementsTests
+    {
+        [Fact]
+        public void CollectStatements_ValidData_ReturnsSchemaTableAndView()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Test", MakeContract("customer"), conn);
+
+                // Load raw data so DESCRIBE works
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var statements = gen.CollectStatements();
+
+                // 3 schema + 1 table + 1 view = 5
+                Assert.Equal(5, statements.Count);
+
+                Assert.Equal("create_schema", statements[0].Operation);
+                Assert.Equal("bronze_raw", statements[0].ObjectName);
+                Assert.Contains("CREATE SCHEMA", statements[0].Sql);
+
+                Assert.Equal("create_schema", statements[1].Operation);
+                Assert.Equal("bronze", statements[1].ObjectName);
+
+                Assert.Equal("create_schema", statements[2].Operation);
+                Assert.Equal("bronze_quarantine", statements[2].ObjectName);
+
+                Assert.Equal("create_table", statements[3].Operation);
+                Assert.Contains("CREATE OR REPLACE TABLE", statements[3].Sql);
+
+                Assert.Equal("create_view", statements[4].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[4].Sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void CollectStatements_MissingRequired_ReturnsQuarantineStatements()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("id\n1\n");
+            try
+            {
+                var contract = new Contract.Contract
+                {
+                    Table = "customer",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "required_col", Accepts = ["required_col"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+
+                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
+
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var statements = gen.CollectStatements();
+
+                // 3 schema + 1 table + 1 quarantine_view + 1 quarantine_log = 6
+                Assert.Equal(6, statements.Count);
+
+                Assert.Equal("create_quarantine_view", statements[4].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[4].Sql);
+
+                Assert.Equal("insert_quarantine_log", statements[5].Operation);
+                Assert.Contains("INSERT INTO", statements[5].Sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
     // ===== SanitizeIdentifier Tests =====
 
     public class SanitizeIdentifierTests
