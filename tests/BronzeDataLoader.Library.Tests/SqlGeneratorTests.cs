@@ -700,6 +700,83 @@ public class SqlGeneratorTests
         }
     }
 
+    // ===== SanitizeIdentifier Tests =====
+
+    public class SanitizeIdentifierTests
+    {
+        [Fact]
+        public void Sanitize_SimpleAlphanumeric_Unchanged()
+        {
+            Assert.Equal("customer", SqlGenerator.SanitizeIdentifier("customer"));
+        }
+
+        [Fact]
+        public void Sanitize_Underscores_Unchanged()
+        {
+            Assert.Equal("bronze_raw", SqlGenerator.SanitizeIdentifier("bronze_raw"));
+        }
+
+        [Fact]
+        public void Sanitize_Spaces_ReplacedWithUnderscore()
+        {
+            Assert.Equal("Capitalism_Inc", SqlGenerator.SanitizeIdentifier("Capitalism Inc"));
+        }
+
+        [Fact]
+        public void Sanitize_Commas_ReplacedWithUnderscore()
+        {
+            Assert.Equal("Capitalism_Inc", SqlGenerator.SanitizeIdentifier("Capitalism,Inc"));
+        }
+
+        [Fact]
+        public void Sanitize_Dots_ReplacedWithUnderscore()
+        {
+            Assert.Equal("Capitalism_Inc", SqlGenerator.SanitizeIdentifier("Capitalism.Inc"));
+        }
+
+        [Fact]
+        public void Sanitize_Hyphens_ReplacedWithUnderscore()
+        {
+            Assert.Equal("my_table_v2", SqlGenerator.SanitizeIdentifier("my-table-v2"));
+        }
+
+        [Fact]
+        public void Sanitize_LeadingDigit_PrefixedWithUnderscore()
+        {
+            Assert.Equal("_123table", SqlGenerator.SanitizeIdentifier("123table"));
+        }
+
+        [Fact]
+        public void Sanitize_MixedSpecialChars_AllReplaced()
+        {
+            Assert.Equal("A_B_C_D_E_", SqlGenerator.SanitizeIdentifier("A.B-C D,E!"));
+        }
+
+        [Fact]
+        public void Sanitize_EmptyString_ReturnsUnderscore()
+        {
+            Assert.Equal("_", SqlGenerator.SanitizeIdentifier(""));
+        }
+
+        [Fact]
+        public void Sanitize_NullInput_ReturnsUnderscore()
+        {
+            Assert.Equal("_", SqlGenerator.SanitizeIdentifier(null!));
+        }
+
+        [Fact]
+        public void Sanitize_DoubleQuotes_ReplacedWithUnderscore()
+        {
+            Assert.Equal("Table_Name", SqlGenerator.SanitizeIdentifier("Table\"Name"));
+        }
+
+        [Fact]
+        public void Sanitize_SingleQuotes_ReplacedWithUnderscore()
+        {
+            Assert.Equal("Table_Name", SqlGenerator.SanitizeIdentifier("Table'Name"));
+        }
+    }
+
     // ===== QuoteQualified Tests =====
 
     public class QuoteQualifiedTests
@@ -716,6 +793,21 @@ public class SqlGeneratorTests
         {
             var result = SqlGenerator.QuoteQualified("bronze_raw.customer_Acme_abc12345");
             Assert.Equal("\"bronze_raw\".\"customer_Acme_abc12345\"", result);
+        }
+
+        [Fact]
+        public void QuoteQualified_NameWithDotInTablePart_SplitsOnFirstDot()
+        {
+            var result = SqlGenerator.QuoteQualified("a.b.c");
+            Assert.Equal("\"a\".\"b.c\"", result);
+        }
+
+        [Fact]
+        public void QuoteQualified_EmbeddedDoubleQuote_Escaped()
+        {
+            // After sanitization this shouldn't occur, but QuoteQualified should still be safe
+            var result = SqlGenerator.QuoteQualified("sch\"ema.table");
+            Assert.Equal("\"sch\"\"ema\".\"table\"", result);
         }
     }
 }

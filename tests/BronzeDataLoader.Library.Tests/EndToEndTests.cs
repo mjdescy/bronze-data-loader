@@ -382,6 +382,76 @@ columns:
         }
     }
 
+    [Fact]
+    public void FullPipeline_SpecialCharactersInSubmitter_SanitizesCorrectly()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: my-table_v2
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    type: VARCHAR
+    required: true
+""");
+
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            // Submitter with special characters: comma, space, period, hyphen
+            File.WriteAllText(Path.Combine(dataDir, "data.csv"), "id\n42\n");
+
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\n\"Capitalism, Inc.\",data,data.csv,c.yaml\n");
+
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_path: \":memory:\"\n");
+
+            var appConfig = AppConfig.FromYaml(configPath);
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+
+                foreach (var sf in sourceFiles)
+                    sf.GenerateAndExecuteSql(appConfig);
+
+                // Verify raw table exists with sanitized name (special chars → underscores)
+                var rawTables = GetTableNames(appConfig.Connection!, "bronze_raw");
+                Assert.Single(rawTables);
+
+                // The submitter "Capitalism, Inc." should be sanitized to "Capitalism__Inc_"
+                // The table "my-table_v2" should be sanitized to "my_table_v2"
+                Assert.Contains("my_table_v2", rawTables[0]);
+                Assert.Contains("Capitalism__Inc_", rawTables[0]);
+
+                // Verify bronze view exists
+                var bronzeViews = GetTableNames(appConfig.Connection!, "bronze");
+                Assert.Single(bronzeViews);
+
+                // Verify data is accessible
+                using var cmd = appConfig.Connection!.CreateCommand();
+                cmd.CommandText = $"SELECT id FROM \"bronze\".\"{bronzeViews[0]}\"";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("42", reader.GetString(0));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
     // ===== Helpers =====
 
     private static string[] GetTableNames(DuckDBConnection conn, string schema)

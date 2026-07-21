@@ -29,24 +29,66 @@ public class SqlGenerator(
         }
     }
 
+    /// <summary>Safe table name part: sanitized {Table}_{Submitter}_{hash}.</summary>
+    private string SafeTablePart =>
+        $"{SanitizeIdentifier(Contract.Table)}_{SanitizeIdentifier(Submitter)}_{StemHash}";
+
     /// <summary>Full view/table name including schema and hash.</summary>
     public string FullTableName =>
-        $"{Contract.Schema.Valid}.{Contract.Table}_{Submitter}_{StemHash}";
+        $"{SanitizeIdentifier(Contract.Schema.Valid)}.{SafeTablePart}";
 
     /// <summary>Bronze_raw table name for this source file.</summary>
     public string RawTableName =>
-        $"{Contract.Schema.Staging}.{Contract.Table}_{Submitter}_{StemHash}";
+        $"{SanitizeIdentifier(Contract.Schema.Staging)}.{SafeTablePart}";
 
     /// <summary>Bronze_quarantine view name for this source file.</summary>
     public string QuarantineTableName =>
-        $"{Contract.Schema.Invalid}.{Contract.Table}_{Submitter}_{StemHash}";
+        $"{SanitizeIdentifier(Contract.Schema.Invalid)}.{SafeTablePart}";
+
+    /// <summary>
+    /// Replace any character that is not alphanumeric or underscore with underscore.
+    /// DuckDB object names (schemas, tables, views, columns) must not contain
+    /// special characters even when quoted, to avoid ambiguous or broken SQL.
+    /// </summary>
+    public static string SanitizeIdentifier(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return "_";
+
+        var sanitized = new string(
+            [.. name.Select(c => char.IsLetterOrDigit(c) || c == '_' ? c : '_')]
+        );
+
+        // Identifiers that start with a digit are invalid; prefix with underscore
+        if (char.IsDigit(sanitized[0]))
+            sanitized = "_" + sanitized;
+
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Convert a qualified name like "schema.table" to properly quoted '"schema"."table"'.
+    /// Each part is sanitized and any embedded double-quote characters are escaped.
+    /// </summary>
+    public static string QuoteQualified(string name)
+    {
+        var parts = name.Split('.', 2);
+        return $"\"{EscapeQuotes(parts[0])}\".\"{EscapeQuotes(parts[1])}\"";
+    }
+
+    /// <summary>Escape double quotes within an identifier by doubling them.</summary>
+    private static string EscapeQuotes(string value) => value.Replace("\"", "\"\"");
 
     /// <summary>Build CREATE SCHEMA IF NOT EXISTS statements for all contract schemas.</summary>
     public string BuildCreateSchemaIfNotExists()
     {
-        return $"CREATE SCHEMA IF NOT EXISTS \"{Contract.Schema.Staging}\";\n" +
-               $"CREATE SCHEMA IF NOT EXISTS \"{Contract.Schema.Valid}\";\n" +
-               $"CREATE SCHEMA IF NOT EXISTS \"{Contract.Schema.Invalid}\";";
+        var staging = SanitizeIdentifier(Contract.Schema.Staging);
+        var valid = SanitizeIdentifier(Contract.Schema.Valid);
+        var invalid = SanitizeIdentifier(Contract.Schema.Invalid);
+
+        return $"CREATE SCHEMA IF NOT EXISTS \"{staging}\";\n" +
+               $"CREATE SCHEMA IF NOT EXISTS \"{valid}\";\n" +
+               $"CREATE SCHEMA IF NOT EXISTS \"{invalid}\";";
     }
 
     /// <summary>
@@ -65,15 +107,6 @@ public class SqlGenerator(
             ".xlsx" => $"read_xlsx('{FilePath}', header=true)",
             _ => throw new InvalidOperationException($"Unsupported source format: {extension}"),
         };
-    }
-
-    /// <summary>
-    /// Convert a qualified name like "schema.table" to properly quoted '"schema"."table"'.
-    /// </summary>
-    public static string QuoteQualified(string name)
-    {
-        var parts = name.Split('.', 2);
-        return $"\"{parts[0]}\".\"{parts[1]}\"";
     }
 
     /// <summary>
@@ -126,6 +159,8 @@ public class SqlGenerator(
                 }
             }
 
+            var safeCanonical = SanitizeIdentifier(col.Canonical);
+
             if (found is null)
             {
                 if (col.Required)
@@ -135,12 +170,14 @@ public class SqlGenerator(
                 }
                 else
                 {
-                    selectCols.Add($"NULL::{col.Type.ToUpperInvariant()} AS {col.Canonical}");
+                    selectCols.Add($"NULL::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
                 }
                 continue;
             }
 
-            selectCols.Add($"\"{found}\"::{col.Type.ToUpperInvariant()} AS {col.Canonical}");
+            // Quote and sanitize the found column name for safe SQL
+            var safeFound = EscapeQuotes(found.Trim());
+            selectCols.Add($"\"{safeFound}\"::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
         }
 
         // Find extra columns not in the contract
@@ -193,9 +230,8 @@ public class SqlGenerator(
     {
         var rawTable = RawTableName;
         var rawQuoted = QuoteQualified(rawTable);
-        var quarantineTable = QuarantineTableName;
-        var quarantineQuoted = QuoteQualified(quarantineTable);
-        var safeMsg = errorMessage.Replace("'", "''");
+        var quarantineQuoted = QuoteQualified(QuarantineTableName);
+        var safeError = errorMessage.Replace("'", "''");
 
         var schemaSql = "CREATE SCHEMA IF NOT EXISTS \"bronze_quarantine\";";
 
@@ -207,7 +243,9 @@ public class SqlGenerator(
 
         var quarantineSql = $"{schemaSql}\n{logDdl}\nCREATE OR REPLACE VIEW {quarantineQuoted} AS SELECT * FROM {rawQuoted};";
 
-        var metadataSql = $"INSERT INTO \"bronze_quarantine\".\"_quarantine_log\" (table_name, error_message)\nVALUES ('{rawTable}', '{safeMsg}');";
+        // rawTable is a sanitized qualified name like "bronze_raw"."customer_Acme_hash"
+        // SafeError has single quotes escaped
+        var metadataSql = $"INSERT INTO \"bronze_quarantine\".\"_quarantine_log\" (table_name, error_message)\nVALUES ('{rawTable}', '{safeError}');";
 
         return (quarantineSql, metadataSql);
     }
