@@ -1,0 +1,721 @@
+using DuckDB.NET.Data;
+using BronzeDataLoader.Library.Contract;
+using BronzeDataLoader.Library.Sql;
+
+namespace BronzeDataLoader.Library.Tests;
+
+public class SqlGeneratorTests
+{
+    private static Contract.Contract MakeContract(
+        string table = "customer",
+        string staging = "bronze_raw",
+        string valid = "bronze",
+        string invalid = "bronze_quarantine")
+    {
+        return new Contract.Contract
+        {
+            Table = table,
+            Schema = new ContractSchema
+            {
+                Staging = staging,
+                Valid = valid,
+                Invalid = invalid,
+            },
+            Columns =
+            [
+                new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Type = "VARCHAR", Required = true },
+                new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
+                new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = false },
+            ],
+        };
+    }
+
+    private static string CreateTempCsv(string content)
+    {
+        var path = Path.GetTempFileName() + ".csv";
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    private static DuckDBConnection CreateInMemoryConnection()
+    {
+        var conn = new DuckDBConnection("DataSource=:memory:");
+        conn.Open();
+        return conn;
+    }
+
+    private static void ExecuteSql(DuckDBConnection conn, string sql)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private static string[] GetColumnNames(DuckDBConnection conn, string tableName)
+    {
+        var cols = new List<string>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT column_name FROM (DESCRIBE SELECT * FROM {tableName})";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            cols.Add(reader.GetString(0));
+        return [.. cols];
+    }
+
+    // ===== Pure Logic Tests =====
+
+    public class PureLogicTests
+    {
+        [Fact]
+        public void BuildCreateSchemaIfNotExists_ReturnsCorrectSql()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildCreateSchemaIfNotExists();
+                Assert.Contains("CREATE SCHEMA IF NOT EXISTS \"bronze_raw\"", sql);
+                Assert.Contains("CREATE SCHEMA IF NOT EXISTS \"bronze\"", sql);
+                Assert.Contains("CREATE SCHEMA IF NOT EXISTS \"bronze_quarantine\"", sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void FullTableName_ReturnsCorrectFormat()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var name = gen.FullTableName;
+                Assert.StartsWith("bronze.customer_Acme_", name);
+                Assert.Matches(@"^bronze\.customer_Acme_[a-f0-9]{8}$", name);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void RawTableName_ReturnsCorrectFormat()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var name = gen.RawTableName;
+                Assert.Matches(@"^bronze_raw\.customer_Acme_[a-f0-9]{8}$", name);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void QuarantineTableName_ReturnsCorrectFormat()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var name = gen.QuarantineTableName;
+                Assert.Matches(@"^bronze_quarantine\.customer_Acme_[a-f0-9]{8}$", name);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void Hash_IsConsistentForSameStem()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen1 = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var hash1 = gen1.StemHash;
+
+                var gen2 = new SqlGenerator(csvPath, "Beta", MakeContract(), conn);
+                var hash2 = gen2.StemHash;
+
+                Assert.Equal(hash1, hash2);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BuildCreateSchemaIfNotExists_CreatesSchema()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildCreateSchemaIfNotExists();
+                ExecuteSql(conn, sql);
+
+                // Verify all three schemas exist
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('bronze_raw', 'bronze', 'bronze_quarantine') ORDER BY schema_name";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read()); // bronze
+                Assert.True(reader.Read()); // bronze_quarantine
+                Assert.True(reader.Read()); // bronze_raw
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
+    // ===== Read Function Tests =====
+
+    public class BuildReadFunctionCallTests
+    {
+        [Fact]
+        public void CsvFile_ReturnsReadCsvWithAllVarchar()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("a,b\n1,2\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildReadFunctionCall();
+                Assert.Contains("read_csv(", sql);
+                Assert.Contains("all_varchar=true", sql);
+                Assert.Contains("header=true", sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void TsvFile_ReturnsReadCsvWithTabDelimiter()
+        {
+            using var conn = CreateInMemoryConnection();
+            var tsvPath = Path.GetTempFileName() + ".tsv";
+            File.WriteAllText(tsvPath, "a\tb\n1\t2\n");
+            try
+            {
+                var gen = new SqlGenerator(tsvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildReadFunctionCall();
+                Assert.Contains("read_csv(", sql);
+                Assert.Contains("delim='\\t'", sql);
+                Assert.Contains("all_varchar=true", sql);
+            }
+            finally
+            {
+                if (File.Exists(tsvPath)) File.Delete(tsvPath);
+            }
+        }
+
+        [Fact]
+        public void XlsxFile_ReturnsReadXlsx()
+        {
+            using var conn = CreateInMemoryConnection();
+            var xlsxPath = Path.GetTempFileName() + ".xlsx";
+            File.WriteAllText(xlsxPath, "dummy");
+            try
+            {
+                var gen = new SqlGenerator(xlsxPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildReadFunctionCall();
+                Assert.Contains("read_xlsx(", sql);
+            }
+            finally
+            {
+                if (File.Exists(xlsxPath)) File.Delete(xlsxPath);
+            }
+        }
+
+        [Fact]
+        public void UnsupportedExtension_ThrowsInvalidOperationException()
+        {
+            using var conn = CreateInMemoryConnection();
+            var badPath = Path.GetTempFileName() + ".xyz";
+            File.WriteAllText(badPath, "dummy");
+            try
+            {
+                var gen = new SqlGenerator(badPath, "Acme", MakeContract(), conn);
+                Assert.Throws<InvalidOperationException>(() => gen.BuildReadFunctionCall());
+            }
+            finally
+            {
+                if (File.Exists(badPath)) File.Delete(badPath);
+            }
+        }
+
+        [Fact]
+        public void FileWithWhitespaceInPath_HandlesCorrectly()
+        {
+            using var conn = CreateInMemoryConnection();
+            var dir = Path.Combine(Path.GetTempPath(), "test dir");
+            Directory.CreateDirectory(dir);
+            var csvPath = Path.Combine(dir, "data file.csv");
+            File.WriteAllText(csvPath, "a,b\n1,2\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildReadFunctionCall();
+                Assert.Contains(csvPath, sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+                if (Directory.Exists(dir)) Directory.Delete(dir);
+            }
+        }
+    }
+
+    // ===== Raw Load SQL Tests =====
+
+    public class BuildRawLoadSqlTests
+    {
+        [Fact]
+        public void BuildRawLoadSql_ReturnsCreateOrReplaceTable()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildRawLoadSql();
+
+                Assert.Contains("CREATE OR REPLACE TABLE", sql);
+                Assert.Contains("\"bronze_raw\".\"customer_Acme_", sql);
+                Assert.Contains("read_csv(", sql);
+                Assert.EndsWith(";", sql.Trim());
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BuildRawLoadSql_ExecutesSuccessfully()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var cols = GetColumnNames(conn, SqlGenerator.QuoteQualified(gen.RawTableName));
+                Assert.Contains("customer_id", cols);
+                Assert.Contains("signup_date", cols);
+                Assert.Contains("email", cols);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
+    // ===== BuildSelect Tests =====
+
+    public class BuildSelectTests
+    {
+        [Fact]
+        public void AllColumnsPresent_ReturnsCorrectSelect()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("customer_id", sql);
+                Assert.Contains("signup_date", sql);
+                Assert.Contains("email", sql);
+                Assert.Empty(warnings);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MissingRequiredColumn_ThrowsInvalidOperationException()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date\n1,2024-01-01\n"); // missing email is OK (optional)
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                // Creates a contract where signup_date is also missing but required
+                var contractWithMoreRequired = new Contract.Contract
+                {
+                    Table = "customer",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "missing_col", Accepts = ["missing_col"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen2 = new SqlGenerator(csvPath, "Acme", contractWithMoreRequired, conn);
+                Assert.Throws<InvalidOperationException>(() => gen2.BuildSelect());
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MissingOptionalColumn_ProducesNull()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date\n1,2024-01-01\n"); // email missing (optional)
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("NULL::VARCHAR AS email", sql);
+                Assert.Empty(warnings);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void ExtraColumns_ProducesWarning()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email,extra_col\n1,2024-01-01,a@b.com,extra\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("customer_id", sql);
+                Assert.NotEmpty(warnings);
+                Assert.Contains("extra_col", warnings[0], StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void CaseInsensitiveColumnMatching_Works()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("CUSTOMER_ID,SIGNUP_DATE,EMAIL\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("customer_id", sql);
+                Assert.Contains("signup_date", sql);
+                Assert.Contains("email", sql);
+                Assert.Empty(warnings);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void AlternativeAcceptName_ResolvesCorrectly()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("cust_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var contractWithAlias = new Contract.Contract
+                {
+                    Table = "customer",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = false },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Acme", contractWithAlias, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("customer_id", sql);
+                Assert.Empty(warnings);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void ColumnsWithWhitespace_AreStripped()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv(" customer_id , signup_date , email \n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildSelect();
+
+                Assert.Contains("customer_id", sql);
+                Assert.Contains("signup_date", sql);
+                Assert.Contains("email", sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
+    // ===== Bronze View SQL Tests =====
+
+    public class BuildBronzeViewSqlTests
+    {
+        [Fact]
+        public void BuildBronzeViewSql_ReturnsCreateOrReplaceView()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildBronzeViewSql();
+
+                Assert.Contains("CREATE OR REPLACE VIEW", sql);
+                Assert.Contains("\"bronze\".\"customer_Acme_", sql);
+                Assert.Contains("FROM", sql);
+                Assert.Empty(warnings);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BronzeViewSql_ExecutesAndReturnsData()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n42,2024-01-15,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, warnings) = gen.BuildBronzeViewSql();
+                ExecuteSql(conn, sql);
+
+                // Query the view (cast DATE to VARCHAR for locale-independent comparison)
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("42", reader.GetString(0));
+                Assert.Equal("2024-01-15", reader.GetString(1));
+                Assert.Equal("a@b.com", reader.GetString(2));
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BronzeView_IsViewNotTable()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (sql, _) = gen.BuildBronzeViewSql();
+                ExecuteSql(conn, sql);
+
+                // Verify it's a view
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT table_type FROM information_schema.tables WHERE table_name = '{gen.FullTableName.Split('.')[1]}' AND table_schema = 'bronze'";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("VIEW", reader.GetString(0));
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
+    // ===== Quarantine SQL Tests =====
+
+    public class BuildQuarantineSqlTests
+    {
+        [Fact]
+        public void BuildQuarantineSql_ReturnsDdlAndMetadata()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var error = "Missing required column test";
+                var (quarantineSql, metadataSql) = gen.BuildQuarantineSql(error);
+
+                Assert.Contains("CREATE SCHEMA IF NOT EXISTS", quarantineSql);
+                Assert.Contains("CREATE TABLE IF NOT EXISTS", quarantineSql);
+                Assert.Contains("_quarantine_log", quarantineSql);
+                Assert.Contains("CREATE OR REPLACE VIEW", quarantineSql);
+                Assert.Contains("\"bronze_quarantine\".\"customer_Acme_", quarantineSql);
+
+                Assert.Contains("INSERT INTO", metadataSql);
+                Assert.Contains("_quarantine_log", metadataSql);
+                Assert.Contains(error, metadataSql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void QuarantineSql_ExecutesAndCreatesView()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n1,2024-01-01,a@b.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (quarantineSql, metadataSql) = gen.BuildQuarantineSql("test error msg");
+                ExecuteSql(conn, quarantineSql);
+                ExecuteSql(conn, metadataSql);
+
+                // Verify quarantine view exists
+                using var cmd = conn.CreateCommand();
+                var viewName = gen.QuarantineTableName.Split('.')[1];
+                cmd.CommandText = $"SELECT table_type FROM information_schema.tables WHERE table_name = '{viewName}' AND table_schema = 'bronze_quarantine'";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("VIEW", reader.GetString(0));
+
+                // Verify log entry
+                cmd.CommandText = "SELECT error_message FROM bronze_quarantine._quarantine_log";
+                using var reader2 = cmd.ExecuteReader();
+                Assert.True(reader2.Read());
+                Assert.Contains("test error msg", reader2.GetString(0));
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void QuarantineSql_ViewContainsAllRawData()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email\n99,2024-06-15,z@test.com\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var (quarantineSql, metadataSql) = gen.BuildQuarantineSql("error");
+                ExecuteSql(conn, quarantineSql);
+                ExecuteSql(conn, metadataSql);
+
+                // Verify data is preserved in quarantine view
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT * FROM {SqlGenerator.QuoteQualified(gen.QuarantineTableName)}";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("99", reader.GetString(0));
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
+    // ===== QuoteQualified Tests =====
+
+    public class QuoteQualifiedTests
+    {
+        [Fact]
+        public void QuoteQualified_SimpleName_ReturnsQuoted()
+        {
+            var result = SqlGenerator.QuoteQualified("schema.table");
+            Assert.Equal("\"schema\".\"table\"", result);
+        }
+
+        [Fact]
+        public void QuoteQualified_NameWithUnderscores_ReturnsQuoted()
+        {
+            var result = SqlGenerator.QuoteQualified("bronze_raw.customer_Acme_abc12345");
+            Assert.Equal("\"bronze_raw\".\"customer_Acme_abc12345\"", result);
+        }
+    }
+}
