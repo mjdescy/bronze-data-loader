@@ -1,0 +1,27 @@
+{
+    // Format on save using the C# extension (also used by C# Dev Kit)
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "[csharp]": {
+        "editor.defaultFormatter": "ms-dotnettools.csharp",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    // ===== General Editor =====
+    "files.exclude": {
+        "**/bin/**": true,
+        "**/obj/**": true,
+        "**/.vs/**": true
+    },
+    "files.autoSave": "onFocusChange",
+    "workbench.colorTheme": "Dark Modern",
+    "editor.minimap.enabled": false,
+    "editor.renderWhitespace": "boundary",
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": true,
+    // ===== Terminal =====
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.fontSize": 13,
+    // ===== Explorer =====
+    "explorer.compactFolders": false
+}
