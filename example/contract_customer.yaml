@@ -1,0 +1,20 @@
+# Destination table
+table: customer
+# Schema for tables that conform to the contract
+schema: bronze
+# Schema for tables that do not conform to the contract
+schema_quarantine: bronze_quarantine
+# Column definitions
+columns:
+  - canonical: customer_id
+    accepts: [customer_id, cust_id, "Customer ID", customerid]
+    type: VARCHAR
+    required: true
+  - canonical: signup_date
+    accepts: [signup_date, sign_up_date, "Signup Date"]
+    type: DATE
+    required: true
+  - canonical: email
+    accepts: [email, Email, email_address]
+    type: VARCHAR
+    required: false

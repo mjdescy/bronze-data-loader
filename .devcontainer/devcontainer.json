@@ -1,0 +1,37 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/dotnet
+{
+	"name": "C# (.NET)",
+	"image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+	"features": {
+		"ghcr.io/eitsupi/devcontainer-features/duckdb-cli:1": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/just:1": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/lazygit:1": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/opencode:1": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/yazi:1": {},
+		"ghcr.io/devcontainers-extra/features/micro:1": {}
+	},
+	"mounts": [
+		"source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/vscode/.local/share/opencode/auth.json,type=bind,consistency=cached",
+		"source=${localEnv:HOME}/.config/opencode,target=/home/vscode/.config/opencode,type=bind,consistency=cached"
+	],
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-dotnettools.csdevkit",
+				"ms-dotnettools.vscode-dotnet-runtime",
+				"GitHub.copilot",
+				"GitHub.copilot-chat",
+				"DenizhanDaklr.opencode-go-for-copilot",
+                "chuckjonas.duckdb",
+				"yzhang.markdown-all-in-one"
+			]
+		}
+	},
+	"remoteEnv": {
+		"EDITOR": "micro",
+		"VISUAL": "micro",
+		"GIT_EDITOR": "micro"
+	},
+	"postStartCommand": "bash -lc 'SUDO=\"\"; if [ \"$(id -u)\" -ne 0 ]; then SUDO=\"sudo\"; fi; $SUDO mkdir -p /home/vscode/.local /home/vscode/.local/share /home/vscode/.local/state /home/vscode/.local/share/opencode/repos; $SUDO chown vscode:vscode /home/vscode/.local /home/vscode/.local/share /home/vscode/.local/state /home/vscode/.local/share/opencode /home/vscode/.local/share/opencode/repos'"
+}

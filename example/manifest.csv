@@ -1,0 +1,4 @@
+﻿submitter,source_folder,file_pattern,contract
+Acme,inbox/Acme/data-in,pricing*.csv,sample_data_call_pricing_list_csv.yml
+BetaCorp,inbox/BetaCorp/data-in,pricing*.csv,sample_data_call_pricing_list_csv.yml
+"Capitalism, Inc",inbox/CapitalismInc/data-in,pricing*.csv,sample_data_call_pricing_list_csv.yml
