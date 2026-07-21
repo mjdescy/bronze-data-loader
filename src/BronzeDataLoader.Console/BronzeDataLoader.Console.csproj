@@ -7,12 +7,21 @@
     <Nullable>enable</Nullable>
     <AssemblyName>bronze-data-loader</AssemblyName>
     <Version>0.1.0</Version>
+    <Copyright>Copyright (C) 2026 Michael Descy</Copyright>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <RootNamespace>BronzeDataLoader.Console</RootNamespace>
+    <Description>Load data files into a DuckDB bronze layer</Description>
+    <RepositoryUrl>https://github.com/mjdescy/bronze-data-loader</RepositoryUrl>
+    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <DebugType>none</DebugType>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
