@@ -64,7 +64,7 @@ public record AppConfig
         var dataFolder = ResolvePath(rawConfig.DataFolder ?? ".", configDir);
         var contractsFolder = ResolvePath(rawConfig.ContractsFolder ?? ".", configDir);
         var outputFolder = ResolvePath(rawConfig.OutputFolder ?? ".", configDir);
-        var databasePath = ResolvePath(rawConfig.DatabasePath ?? ".", configDir);
+        var databasePath = ResolveDatabasePath(rawConfig.DatabasePath ?? ".", configDir);
 
         var conn = new DuckDBConnection($"DataSource={databasePath}");
         conn.Open();
@@ -131,6 +131,14 @@ public record AppConfig
         return Path.IsPathRooted(path)
             ? Path.GetFullPath(path)
             : Path.GetFullPath(Path.Combine(configDir, path));
+    }
+
+    private static string ResolveDatabasePath(string path, string configDir)
+    {
+        if (string.Equals(path, ":memory:", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        return ResolvePath(path, configDir);
     }
 
     // ReSharper disable once ClassNeverInstantiated.Local
