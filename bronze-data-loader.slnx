@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BronzeDataLoader.Console/BronzeDataLoader.Console.csproj" />
+    <Project Path="src/BronzeDataLoader.Library/BronzeDataLoader.Library.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BronzeDataLoader.Console.Tests/BronzeDataLoader.Console.Tests.csproj" />
+    <Project Path="tests/BronzeDataLoader.Library.Tests/BronzeDataLoader.Library.Tests.csproj" />
+  </Folder>
+</Solution>
