@@ -174,9 +174,6 @@ data_folder: "data"
 contracts_folder: "contacts"
 output_folder: "output"
 database_path: "database"
-raw_schema: "bronze_raw"
-schema: "bronze"
-schema_quarantine: "bronze_quarantine"
 """;
     File.WriteAllText(configPath, configContent);
 }

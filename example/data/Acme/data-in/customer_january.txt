@@ -1,0 +1,4 @@
+customer_id,signup_date,email
+A1001,2026-01-10,alice@acme.example
+A1002,2026-01-18,bob@acme.example
+A1003,2026-01-27,

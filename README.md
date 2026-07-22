@@ -35,14 +35,11 @@ bronze-data-loader new manifest --output-folder .
 Edit the "config.yaml" file in your favorite editor. It will look like this:
 
 ```yaml
-manifest_path: "data-call-manifest.csv" # default "manifest.csv"
-data_folder: "data"                     # default "." for current working directory
-contracts_folder: "contacts"            # default "." for current working directory
-output_folder: "output"                 # default "." for current working directory
-database_path: "database"               # default "." for current working directory
-raw_schema: "bronze_raw"                # default "staging"
-schema: "bronze"                        # default: "bronze"
-schema_quarantine: "bronze_quarantine"  # default: "quarantine"
+manifest_path: "manifest.csv" # default "manifest.csv"
+data_folder: "data"           # default "." for current working directory
+contracts_folder: "."         # default "." for current working directory
+output_folder: "output"       # default "." for current working directory
+database_path: "database"     # default "." for current working directory
 ```
 
 The values in "manifest.csv" drive what data files are imported and what contract is applied to each data file. Edit the "manifest.csv" file in your favorite text editor or spreadsheet program. It has the following structure:
@@ -82,7 +79,7 @@ columns:                     # Column definitions
 After setting up the configuration files, execute the program like this:
 
 ```bash
-bronze-data-loader load config.yaml
+bronze-data-loader load example/config.yaml
 ```
 
 The program will output a DuckDB database that contains the following:
