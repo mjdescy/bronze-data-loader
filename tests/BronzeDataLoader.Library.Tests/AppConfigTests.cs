@@ -124,13 +124,17 @@ database_path: ":memory:"
     [Fact]
     public void FromYaml_AbsolutePaths_AreUsedAsIs()
     {
-        var yaml = $"""
-manifest_path: "/etc/manifest.csv"
-data_folder: "/var/data"
-contracts_folder: "/etc/contracts"
-output_folder: "/tmp/output"
-database_path: ":memory:"
-""";
+        var manifestInput = "/etc/manifest.csv";
+        var dataInput = "/var/data";
+        var contractsInput = "/etc/contracts";
+        var outputInput = "/tmp/output";
+
+        var yaml =
+            $"manifest_path: \"{manifestInput}\"\n" +
+            $"data_folder: \"{dataInput}\"\n" +
+            $"contracts_folder: \"{contractsInput}\"\n" +
+            $"output_folder: \"{outputInput}\"\n" +
+            "database_path: \":memory:\"\n";
 
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(dir);
@@ -142,10 +146,10 @@ database_path: ":memory:"
 
             var appConfig = Models.AppConfig.FromYaml(yamlPath);
 
-            Assert.Equal("/etc/manifest.csv", appConfig.ManifestPath);
-            Assert.Equal("/var/data", appConfig.DataFolder);
-            Assert.Equal("/etc/contracts", appConfig.ContractsFolder);
-            Assert.Equal("/tmp/output", appConfig.OutputFolder);
+            Assert.Equal(Path.GetFullPath(manifestInput), appConfig.ManifestPath);
+            Assert.Equal(Path.GetFullPath(dataInput), appConfig.DataFolder);
+            Assert.Equal(Path.GetFullPath(contractsInput), appConfig.ContractsFolder);
+            Assert.Equal(Path.GetFullPath(outputInput), appConfig.OutputFolder);
         }
         finally
         {
