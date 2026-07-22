@@ -12,8 +12,8 @@
 
 The command line program is configured by a set of files:
 
-| File          | Purpose                                                                                                    | 
-|---------------|------------------------------------------------------------------------------------------------------------|
+| File          | Purpose                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
 | config.yaml   | Defines default values for file paths, etc.                                                                |
 | manifest.csv  | Defines the source files and which contract each source file is mapped to.                                 |
 | contract.yaml | Defines the canonical and allowed structure for a table's data files. Multiple contract files can be used. |
@@ -47,10 +47,10 @@ schema_quarantine: "bronze_quarantine"  # default: "quarantine"
 
 The values in "manifest.csv" drive what data files are imported and what contract is applied to each data file. Edit the "manifest.csv" file in your favorite text editor or spreadsheet program. It has the following structure:
 
-| submitter  | source_folder | file_pattern  | contract      |
-|------------|---------------|---------------|---------------|
-| Acme, Inc. | Acme/data-in  | customer*.txt | customer.yaml |
-| Beta, LLC  | Beta/data-in  | customer*.tsv | customer.yaml |
+| submitter  | source_folder | file_pattern  | contract               |
+| ---------- | ------------- | ------------- | ---------------------- |
+| Acme, Inc. | Acme/data-in  | customer*.txt | contract_customer.yaml |
+| Beta, LLC  | Beta/data-in  | customer*.tsv | contract_customer.yaml |
 
 Source files can be defined as file patterns with wildcards (?, *). Tables for source files are named as follows: `[contract.table]_[submitter]_[file_stem_hash]`.
 

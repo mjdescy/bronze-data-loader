@@ -17,7 +17,7 @@ public class EndToEndTests
             Directory.CreateDirectory(testDir);
 
             // Contract YAML
-            var contractPath = Path.Combine(testDir, "customer.yaml");
+            var contractPath = Path.Combine(testDir, "contract_customer.yaml");
             File.WriteAllText(contractPath, """
 table: customer
 schema:
@@ -52,8 +52,8 @@ columns:
             // Manifest CSV
             var manifestPath = Path.Combine(testDir, "manifest.csv");
             File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\n" +
-                "Acme,Acme/data-in,customer_data_*.csv,customer.yaml\n" +
-                "BetaCorp,BetaCorp/data-in,customer_list.tsv,customer.yaml\n");
+                "Acme,Acme/data-in,customer_data_*.csv,contract_customer.yaml\n" +
+                "BetaCorp,BetaCorp/data-in,customer_list.tsv,contract_customer.yaml\n");
 
             // Config YAML
             var configPath = Path.Combine(testDir, "config.yaml");

@@ -14,7 +14,7 @@ public class ManifestTests
         [Fact]
         public void FromCsv_ValidCsv_ParsesEntries()
         {
-            var csv = "submitter,source_folder,file_pattern,contract\nAcme,data/in,cust*.csv,customer.yaml\nBeta,data/in,*.tsv,other.yaml\n";
+            var csv = "submitter,source_folder,file_pattern,contract\nAcme,data/in,cust*.csv,contract_customer.yaml\nBeta,data/in,*.tsv,other.yaml\n";
 
             var path = Path.GetTempFileName() + ".csv";
             try
@@ -27,7 +27,7 @@ public class ManifestTests
                 Assert.Equal("Acme", manifest.Entries[0].Submitter);
                 Assert.Equal("data/in", manifest.Entries[0].SourceFolder);
                 Assert.Equal("cust*.csv", manifest.Entries[0].FilePattern);
-                Assert.Equal("customer.yaml", manifest.Entries[0].Contract);
+                Assert.Equal("contract_customer.yaml", manifest.Entries[0].Contract);
 
                 Assert.Equal("Beta", manifest.Entries[1].Submitter);
             }
@@ -305,7 +305,7 @@ public class ManifestTests
             {
                 var contractDir = Path.Combine(dir, "contracts");
                 Directory.CreateDirectory(contractDir);
-                var contractPath = Path.Combine(contractDir, "customer.yaml");
+                var contractPath = Path.Combine(contractDir, "contract_customer.yaml");
                 File.WriteAllText(contractPath, """
 table: customer
 schema:
@@ -324,7 +324,7 @@ columns:
                     Submitter = "Acme",
                     SourceFolder = "data",
                     FilePattern = "*.csv",
-                    Contract = "customer.yaml",
+                    Contract = "contract_customer.yaml",
                 };
 
                 var configDir = Path.Combine(dir, "config");
