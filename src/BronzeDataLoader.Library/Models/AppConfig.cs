@@ -76,13 +76,20 @@ public record AppConfig
         var conn = new DuckDBConnection($"DataSource={databasePath}");
         conn.Open();
 
+        // Extract schema names early so they can be used in the CREATE statements below.
+        // These same values are used in the AppConfig returned at the end of this method.
+        var rawSchema = rawConfig.RawSchema ?? "bronze_raw";
+        var schemaQuarantine = rawConfig.SchemaQuarantine ?? "bronze_quarantine";
+
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"bronze_raw\";";
+        cmd.CommandText = $"CREATE SCHEMA IF NOT EXISTS {EscapeSqlIdentifier(rawSchema)};";
         cmd.ExecuteNonQuery();
 
-        cmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"bronze_quarantine\";";
+        // Create the quarantine schema using the configured name
+        cmd.CommandText = $"CREATE SCHEMA IF NOT EXISTS {EscapeSqlIdentifier(schemaQuarantine)};";
         cmd.ExecuteNonQuery();
 
+        // The metadata schema is always "metadata" — it is not user-configurable
         cmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"metadata\";";
         cmd.ExecuteNonQuery();
 
@@ -126,6 +133,15 @@ public record AppConfig
             SchemaQuarantine = rawConfig.SchemaQuarantine ?? "bronze_quarantine",
             Connection = conn,
         };
+    }
+
+    /// <summary>
+    /// Escape a SQL identifier by doubling any embedded double-quote characters
+    /// and wrapping it in double quotes.
+    /// </summary>
+    private static string EscapeSqlIdentifier(string name)
+    {
+        return $"\"{name.Replace("\"", "\"\"")}\"";
     }
 
     private static string ResolvePath(string path, string configDir)
