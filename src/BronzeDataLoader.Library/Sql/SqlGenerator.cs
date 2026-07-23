@@ -54,6 +54,34 @@ public class SqlGenerator(
         $"{SanitizeIdentifier(Contract.Schema.Invalid)}.{SafeTablePart}";
 
     /// <summary>
+    /// Allow-list of DuckDB column types that contracts may specify.
+    /// Prevents SQL injection via unvalidated type names embedded in CAST expressions.
+    /// </summary>
+    private static readonly HashSet<string> AllowedColumnTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // String types
+        "VARCHAR", "TEXT", "STRING",
+        // Integer types
+        "BIGINT", "INTEGER", "INT", "SMALLINT", "TINYINT", "HUGEINT",
+        "UBIGINT", "UINTEGER", "USMALLINT", "UTINYINT",
+        // Numeric types
+        "DOUBLE", "FLOAT", "REAL", "DECIMAL", "NUMERIC",
+        // Boolean
+        "BOOLEAN", "BOOL",
+        // Date/time types
+        "DATE", "TIME", "TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP_MS", "TIMESTAMP_S",
+        "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE",
+        // Interval
+        "INTERVAL",
+        // UUID
+        "UUID",
+        // Binary
+        "BLOB", "BYTEA", "BINARY", "VARBINARY",
+        // JSON
+        "JSON",
+    };
+
+    /// <summary>
     /// Replace any character that is not alphanumeric or underscore with underscore.
     /// DuckDB object names (schemas, tables, views, columns) must not contain
     /// special characters even when quoted, to avoid ambiguous or broken SQL.
@@ -165,6 +193,15 @@ public class SqlGenerator(
 
         foreach (var col in Contract.Columns)
         {
+            // Validate the column type against the allow-list before embedding it in SQL
+            if (!AllowedColumnTypes.Contains(col.Type))
+            {
+                errors.Add(
+                    $"Unsupported column type '{col.Type}' for column '{col.Canonical}'. " +
+                    $"Allowed types: {string.Join(", ", AllowedColumnTypes.Order())}");
+                continue;
+            }
+
             string? found = null;
             foreach (var acceptedName in col.Accepts)
             {
