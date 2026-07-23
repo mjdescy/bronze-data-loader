@@ -295,11 +295,11 @@ public class CliEndToEndTests
         Directory.CreateDirectory(outputDir);
 
         File.WriteAllText(configPath, $"""
-manifest_path: "{rootDir}/manifest.csv"
-data_folder: "{rootDir}"
-contracts_folder: "{rootDir}"
-output_folder: "{outputDir}"
-database_name: ":memory:"
+manifest_path: '{rootDir}/manifest.csv'
+data_folder: '{rootDir}'
+contracts_folder: '{rootDir}'
+output_folder: '{outputDir}'
+database_name: ':memory:'
 """);
 
         // contract_customer.yaml

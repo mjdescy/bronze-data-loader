@@ -134,7 +134,7 @@ public class ManifestTests
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -172,7 +172,7 @@ public class ManifestTests
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -211,7 +211,7 @@ public class ManifestTests
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -246,7 +246,7 @@ public class ManifestTests
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -278,7 +278,7 @@ public class ManifestTests
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -330,7 +330,7 @@ columns:
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{contractDir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{contractDir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -373,7 +373,7 @@ columns: []
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -405,7 +405,7 @@ columns: []
                 var configDir = Path.Combine(dir, "config");
                 Directory.CreateDirectory(configDir);
                 var configPath = Path.Combine(configDir, "config.yaml");
-                File.WriteAllText(configPath, $"data_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"data_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -443,7 +443,7 @@ columns: []
                 File.WriteAllText(manifestPath, manifestCsv);
 
                 var configPath = Path.Combine(dir, "config.yaml");
-                File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)
@@ -478,7 +478,7 @@ columns: []
                 File.WriteAllText(manifestPath, manifestCsv);
 
                 var configPath = Path.Combine(dir, "config.yaml");
-                File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{dir}\"\ncontracts_folder: \"{dir}\"\noutput_folder: \"{dir}\"\ndatabase_name: \":memory:\"\n");
+                File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{dir}'\ncontracts_folder: '{dir}'\noutput_folder: '{dir}'\ndatabase_name: ':memory:'\n");
 
                 var appConfig = AppConfig.FromYaml(configPath);
                 using (appConfig.Connection!)

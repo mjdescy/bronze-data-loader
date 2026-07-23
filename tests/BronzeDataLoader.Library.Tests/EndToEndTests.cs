@@ -57,7 +57,7 @@ columns:
 
             // Config YAML
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
 
             // ===== Execute Pipeline =====
             var appConfig = AppConfig.FromYaml(configPath);
@@ -216,7 +216,7 @@ columns:
             File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,test.csv,c.yaml\n");
 
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
 
             var appConfig = AppConfig.FromYaml(configPath);
             using (appConfig.Connection!)
@@ -281,7 +281,7 @@ columns:
             File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,test.csv,c.yaml\n");
 
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
 
             var appConfig = AppConfig.FromYaml(configPath);
             using (appConfig.Connection!)
@@ -342,7 +342,7 @@ columns:
             File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,bad.csv,c.yaml\n");
 
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
 
             var appConfig = AppConfig.FromYaml(configPath);
             using (appConfig.Connection!)
@@ -411,7 +411,7 @@ columns:
             File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\n\"Capitalism, Inc.\",data,data.csv,c.yaml\n");
 
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{testDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
 
             var appConfig = AppConfig.FromYaml(configPath);
             using (appConfig.Connection!)
@@ -492,7 +492,7 @@ columns:
 
             // Config
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{outputDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{outputDir}'\ndatabase_name: ':memory:'\n");
 
             // Execute pipeline in generate-sql mode (simulate what CLI does)
             var appConfig = AppConfig.FromYaml(configPath);
@@ -620,7 +620,7 @@ columns:
             Directory.CreateDirectory(outputDir);
 
             var configPath = Path.Combine(testDir, "config.yaml");
-            File.WriteAllText(configPath, $"manifest_path: \"{manifestPath}\"\ndata_folder: \"{testDir}\"\ncontracts_folder: \"{testDir}\"\noutput_folder: \"{outputDir}\"\ndatabase_name: \":memory:\"\n");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{outputDir}'\ndatabase_name: ':memory:'\n");
 
             var appConfig = AppConfig.FromYaml(configPath);
 
