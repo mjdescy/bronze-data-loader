@@ -76,6 +76,30 @@ public record AppConfig
         cmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"bronze_quarantine\";";
         cmd.ExecuteNonQuery();
 
+        cmd.CommandText = "CREATE SCHEMA IF NOT EXISTS \"metadata\";";
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS "metadata"."table_load" (
+                table_schema VARCHAR,
+                table_name VARCHAR,
+                file_name VARCHAR,
+                file_path VARCHAR,
+                imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                row_count BIGINT
+            );
+            """;
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS "metadata"."quarantine" (
+                table_name VARCHAR,
+                error_message VARCHAR,
+                quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """;
+        cmd.ExecuteNonQuery();
+
         return new AppConfig
         {
             ManifestPath = manifestPath,

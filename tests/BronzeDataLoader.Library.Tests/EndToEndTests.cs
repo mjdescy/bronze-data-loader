@@ -361,15 +361,13 @@ columns:
                 var bronzeViews = GetTableNames(appConfig.Connection!, "bronze");
                 Assert.Empty(bronzeViews);
 
-                // Quarantine view should exist
+                // Quarantine view should exist in bronze_quarantine
                 var quarantineViews = GetTableNames(appConfig.Connection!, "bronze_quarantine");
-                Assert.Equal(2, quarantineViews.Length); // _quarantine_log table + the quarantined view
-                var quarantineView = quarantineViews.First(n => !n.StartsWith("_"));
-                Assert.NotNull(quarantineView);
+                Assert.Single(quarantineViews); // only the quarantined view (log moved to metadata)
 
-                // Quarantine log should have entry
+                // Quarantine log should have entry in metadata.quarantine
                 using var cmd = appConfig.Connection!.CreateCommand();
-                cmd.CommandText = "SELECT error_message FROM bronze_quarantine._quarantine_log";
+                cmd.CommandText = "SELECT error_message FROM metadata.quarantine";
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Contains("required_col", reader.GetString(0), StringComparison.OrdinalIgnoreCase);
@@ -542,25 +540,31 @@ columns:
                 // Verify files
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 schema files + 1 table file + 1 view file = 5 files
-                Assert.Equal(5, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 table_load = 7 files
+                Assert.Equal(7, sqlFiles.Length);
 
                 // Verify ordering and naming
                 Assert.StartsWith("001_create_schema_bronze_raw", Path.GetFileName(sqlFiles[0]));
                 Assert.StartsWith("002_create_schema_bronze", Path.GetFileName(sqlFiles[1]));
                 Assert.StartsWith("003_create_schema_bronze_quarantine", Path.GetFileName(sqlFiles[2]));
-                Assert.StartsWith("004_create_table_t_Test_", Path.GetFileName(sqlFiles[3]));
-                Assert.StartsWith("005_create_view_t_Test_", Path.GetFileName(sqlFiles[4]));
+                Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
+                Assert.StartsWith("005_create_table_t_Test_", Path.GetFileName(sqlFiles[4]));
+                Assert.StartsWith("006_create_view_t_Test_", Path.GetFileName(sqlFiles[5]));
+                Assert.StartsWith("007_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[6]));
 
                 // Verify SQL content
-                var tableSql = File.ReadAllText(sqlFiles[3]);
+                var tableSql = File.ReadAllText(sqlFiles[4]);
                 Assert.Contains("CREATE OR REPLACE TABLE", tableSql);
                 Assert.Contains("read_csv(", tableSql);
 
-                var viewSql = File.ReadAllText(sqlFiles[4]);
+                var viewSql = File.ReadAllText(sqlFiles[5]);
                 Assert.Contains("CREATE OR REPLACE VIEW", viewSql);
                 Assert.Contains("SELECT", viewSql);
                 Assert.Contains("FROM", viewSql);
+
+                var metadataLoadSql = File.ReadAllText(sqlFiles[6]);
+                Assert.Contains("INSERT INTO", metadataLoadSql);
+                Assert.Contains("\"metadata\".\"table_load\"", metadataLoadSql);
             }
         }
         finally
@@ -648,20 +652,27 @@ columns:
 
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 schema + 1 table + 1 quarantine_view + 1 quarantine_log = 6
-                Assert.Equal(6, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view + 1 quarantine_log + 1 table_load = 8
+                Assert.Equal(8, sqlFiles.Length);
 
-                // Verify quarantine view file exists
-                Assert.Contains("create_quarantine_view", sqlFiles[4]);
-                Assert.Contains("insert_quarantine_log", sqlFiles[5]);
+                // Verify file order
+                Assert.StartsWith("001_create_schema_", Path.GetFileName(sqlFiles[0]));
+                Assert.StartsWith("005_create_table_", Path.GetFileName(sqlFiles[4]));
+                Assert.Contains("create_quarantine_view", sqlFiles[5]);
+                Assert.Contains("insert_quarantine_log", sqlFiles[6]);
+                Assert.Contains("insert_table_load", sqlFiles[7]);
 
-                var quarantineViewSql = File.ReadAllText(sqlFiles[4]);
+                var quarantineViewSql = File.ReadAllText(sqlFiles[5]);
                 Assert.Contains("CREATE OR REPLACE VIEW", quarantineViewSql);
                 Assert.Contains("bronze_quarantine", quarantineViewSql);
 
-                var logSql = File.ReadAllText(sqlFiles[5]);
+                var logSql = File.ReadAllText(sqlFiles[6]);
                 Assert.Contains("INSERT INTO", logSql);
-                Assert.Contains("_quarantine_log", logSql);
+                Assert.Contains("\"metadata\".\"quarantine\"", logSql);
+
+                var tableLoadSql = File.ReadAllText(sqlFiles[7]);
+                Assert.Contains("INSERT INTO", tableLoadSql);
+                Assert.Contains("\"metadata\".\"table_load\"", tableLoadSql);
             }
         }
         finally

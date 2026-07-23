@@ -620,14 +620,11 @@ public class SqlGeneratorTests
                 var error = "Missing required column test";
                 var (quarantineSql, metadataSql) = gen.BuildQuarantineSql(error);
 
-                Assert.Contains("CREATE SCHEMA IF NOT EXISTS", quarantineSql);
-                Assert.Contains("CREATE TABLE IF NOT EXISTS", quarantineSql);
-                Assert.Contains("_quarantine_log", quarantineSql);
                 Assert.Contains("CREATE OR REPLACE VIEW", quarantineSql);
                 Assert.Contains("\"bronze_quarantine\".\"customer_Acme_", quarantineSql);
 
                 Assert.Contains("INSERT INTO", metadataSql);
-                Assert.Contains("_quarantine_log", metadataSql);
+                Assert.Contains("\"metadata\".\"quarantine\"", metadataSql);
                 Assert.Contains(error, metadataSql);
             }
             finally
@@ -647,6 +644,10 @@ public class SqlGeneratorTests
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
+                // Ensure metadata schema and quarantine table exist
+                ExecuteSql(conn, "CREATE SCHEMA IF NOT EXISTS \"metadata\";");
+                ExecuteSql(conn, "CREATE TABLE IF NOT EXISTS \"metadata\".\"quarantine\" (table_name VARCHAR, error_message VARCHAR, quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);");
+
                 var (quarantineSql, metadataSql) = gen.BuildQuarantineSql("test error msg");
                 ExecuteSql(conn, quarantineSql);
                 ExecuteSql(conn, metadataSql);
@@ -659,8 +660,8 @@ public class SqlGeneratorTests
                 Assert.True(reader.Read());
                 Assert.Equal("VIEW", reader.GetString(0));
 
-                // Verify log entry
-                cmd.CommandText = "SELECT error_message FROM bronze_quarantine._quarantine_log";
+                // Verify log entry in metadata.quarantine
+                cmd.CommandText = "SELECT error_message FROM metadata.quarantine";
                 using var reader2 = cmd.ExecuteReader();
                 Assert.True(reader2.Read());
                 Assert.Contains("test error msg", reader2.GetString(0));
@@ -681,6 +682,10 @@ public class SqlGeneratorTests
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                // Ensure metadata schema and quarantine table exist
+                ExecuteSql(conn, "CREATE SCHEMA IF NOT EXISTS \"metadata\";");
+                ExecuteSql(conn, "CREATE TABLE IF NOT EXISTS \"metadata\".\"quarantine\" (table_name VARCHAR, error_message VARCHAR, quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);");
 
                 var (quarantineSql, metadataSql) = gen.BuildQuarantineSql("error");
                 ExecuteSql(conn, quarantineSql);
@@ -719,8 +724,8 @@ public class SqlGeneratorTests
 
                 var statements = gen.CollectStatements();
 
-                // 3 schema + 1 table + 1 view = 5
-                Assert.Equal(5, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 table_load = 7
+                Assert.Equal(7, statements.Count);
 
                 Assert.Equal("create_schema", statements[0].Operation);
                 Assert.Equal("bronze_raw", statements[0].ObjectName);
@@ -732,11 +737,18 @@ public class SqlGeneratorTests
                 Assert.Equal("create_schema", statements[2].Operation);
                 Assert.Equal("bronze_quarantine", statements[2].ObjectName);
 
-                Assert.Equal("create_table", statements[3].Operation);
-                Assert.Contains("CREATE OR REPLACE TABLE", statements[3].Sql);
+                Assert.Equal("create_schema", statements[3].Operation);
+                Assert.Equal("metadata", statements[3].ObjectName);
 
-                Assert.Equal("create_view", statements[4].Operation);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[4].Sql);
+                Assert.Equal("create_table", statements[4].Operation);
+                Assert.Contains("CREATE OR REPLACE TABLE", statements[4].Sql);
+
+                Assert.Equal("create_view", statements[5].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
+
+                Assert.Equal("insert_table_load", statements[6].Operation);
+                Assert.Contains("INSERT INTO", statements[6].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[6].Sql);
             }
             finally
             {
@@ -769,14 +781,19 @@ public class SqlGeneratorTests
 
                 var statements = gen.CollectStatements();
 
-                // 3 schema + 1 table + 1 quarantine_view + 1 quarantine_log = 6
-                Assert.Equal(6, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view + 1 quarantine_log + 1 table_load = 8
+                Assert.Equal(8, statements.Count);
 
-                Assert.Equal("create_quarantine_view", statements[4].Operation);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[4].Sql);
+                Assert.Equal("create_quarantine_view", statements[5].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
 
-                Assert.Equal("insert_quarantine_log", statements[5].Operation);
-                Assert.Contains("INSERT INTO", statements[5].Sql);
+                Assert.Equal("insert_quarantine_log", statements[6].Operation);
+                Assert.Contains("INSERT INTO", statements[6].Sql);
+                Assert.Contains("\"metadata\".\"quarantine\"", statements[6].Sql);
+
+                Assert.Equal("insert_table_load", statements[7].Operation);
+                Assert.Contains("INSERT INTO", statements[7].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[7].Sql);
             }
             finally
             {

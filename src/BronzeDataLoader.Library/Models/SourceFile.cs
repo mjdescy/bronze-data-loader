@@ -30,8 +30,35 @@ public record SourceFile
 
         ExecuteNonQuery(connection, sqlGenerator.BuildCreateSchemaIfNotExists());
 
+        // Ensure metadata schema and tables exist for table_load and quarantine logging
+        ExecuteNonQuery(connection, "CREATE SCHEMA IF NOT EXISTS \"metadata\";");
+        ExecuteNonQuery(connection, """
+            CREATE TABLE IF NOT EXISTS "metadata"."table_load" (
+                table_schema VARCHAR,
+                table_name VARCHAR,
+                file_name VARCHAR,
+                file_path VARCHAR,
+                imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                row_count BIGINT
+            );
+            """);
+        ExecuteNonQuery(connection, """
+            CREATE TABLE IF NOT EXISTS "metadata"."quarantine" (
+                table_name VARCHAR,
+                error_message VARCHAR,
+                quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """);
+
         var rawSql = sqlGenerator.BuildRawLoadSql();
         ExecuteNonQuery(connection, rawSql);
+
+        // Compute row count for metadata
+        var rowCount = GetRowCount(connection, sqlGenerator.RawTableName);
+
+        // Insert table load metadata
+        var metadataInsertSql = sqlGenerator.BuildTableLoadMetadataSql(rowCount);
+        ExecuteNonQuery(connection, metadataInsertSql);
 
         try
         {
@@ -103,5 +130,16 @@ public record SourceFile
         using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
+    }
+
+    private static long GetRowCount(DuckDBConnection connection, string rawTableName)
+    {
+        var parts = rawTableName.Split('.');
+        var schema = parts[0];
+        var table = parts.Length > 1 ? parts[1] : parts[0];
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(*) FROM \"{schema}\".\"{table}\";";
+        var result = cmd.ExecuteScalar();
+        return result is long count ? count : 0L;
     }
 }

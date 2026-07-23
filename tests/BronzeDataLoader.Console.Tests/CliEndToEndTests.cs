@@ -200,6 +200,7 @@ public class CliEndToEndTests
             Assert.Contains(sqlFiles, f => f.Contains("create_schema"));
             Assert.Contains(sqlFiles, f => f.Contains("create_table"));
             Assert.Contains(sqlFiles, f => f.Contains("create_view"));
+            Assert.Contains(sqlFiles, f => f.Contains("insert_table_load"));
         }
         finally
         {
@@ -223,6 +224,7 @@ public class CliEndToEndTests
             var sqlFiles = Directory.GetFiles(outputDir, "*.sql");
             Assert.Contains(sqlFiles, f => f.Contains("create_quarantine_view"));
             Assert.Contains(sqlFiles, f => f.Contains("insert_quarantine_log"));
+            Assert.Contains(sqlFiles, f => f.Contains("insert_table_load"));
         }
         finally
         {
@@ -248,9 +250,9 @@ public class CliEndToEndTests
 
             // First file should be a schema creation
             Assert.StartsWith("001_", Path.GetFileName(sqlFiles[0]));
-            // Last file should be a view creation
+            // Last file should be a table_load insert
             var lastFile = Path.GetFileName(sqlFiles[^1]);
-            Assert.Contains("create_view", lastFile);
+            Assert.Contains("insert_table_load", lastFile);
         }
         finally
         {

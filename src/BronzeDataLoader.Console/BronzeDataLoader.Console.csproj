@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>bronze-data-loader</AssemblyName>
-    <Version>0.2.3</Version>
+    <Version>0.3.0</Version>
     <Copyright>Copyright (C) 2026 Michael Descy</Copyright>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

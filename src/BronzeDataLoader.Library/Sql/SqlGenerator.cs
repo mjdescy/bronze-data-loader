@@ -241,21 +241,47 @@ public class SqlGenerator(
         var quarantineQuoted = QuoteQualified(QuarantineTableName);
         var safeError = errorMessage.Replace("'", "''");
 
-        var schemaSql = "CREATE SCHEMA IF NOT EXISTS \"bronze_quarantine\";";
+        var quarantineSql = $"CREATE OR REPLACE VIEW {quarantineQuoted} AS SELECT * FROM {rawQuoted};";
 
-        var logDdl = "CREATE TABLE IF NOT EXISTS \"bronze_quarantine\".\"_quarantine_log\" (\n" +
-            "    table_name VARCHAR,\n" +
-            "    error_message VARCHAR,\n" +
-            "    quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n" +
-        ");";
-
-        var quarantineSql = $"{schemaSql}\n{logDdl}\nCREATE OR REPLACE VIEW {quarantineQuoted} AS SELECT * FROM {rawQuoted};";
-
-        // rawTable is a sanitized qualified name like "bronze_raw"."customer_Acme_hash"
+        // rawTable is a sanitized qualified name like bronze_raw.customer_Acme_hash
         // SafeError has single quotes escaped
-        var metadataSql = $"INSERT INTO \"bronze_quarantine\".\"_quarantine_log\" (table_name, error_message)\nVALUES ('{rawTable}', '{safeError}');";
+        var metadataSql = $"INSERT INTO \"metadata\".\"quarantine\" (table_name, error_message)\nVALUES ('{rawTable}', '{safeError}');";
 
         return (quarantineSql, metadataSql);
+    }
+
+    /// <summary>
+    /// Build an INSERT INTO <c>metadata.table_load</c> statement using a COUNT(*) subquery
+    /// for the row count. Used in SQL generation mode where the row count is not known upfront.
+    /// </summary>
+    public string BuildTableLoadMetadataSql()
+    {
+        var rawQuoted = QuoteQualified(RawTableName);
+        var rawSchemaParts = RawTableName.Split('.');
+        var rawSchema = rawSchemaParts[0];
+        var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
+        var fileName = Path.GetFileName(FilePath);
+        var filePath = FilePath.Replace("'", "''");
+
+        return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, row_count)\n" +
+               $"SELECT '{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', COUNT(*) FROM {rawQuoted};";
+    }
+
+    /// <summary>
+    /// Build an INSERT INTO <c>metadata.table_load</c> statement with a known row count.
+    /// Used in direct execution mode where the row count has already been computed.
+    /// </summary>
+    /// <param name="rowCount">The number of rows in the imported table.</param>
+    public string BuildTableLoadMetadataSql(long rowCount)
+    {
+        var rawSchemaParts = RawTableName.Split('.');
+        var rawSchema = rawSchemaParts[0];
+        var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
+        var fileName = Path.GetFileName(FilePath);
+        var filePath = FilePath.Replace("'", "''");
+
+        return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, row_count)\n" +
+               $"VALUES ('{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', {rowCount});";
     }
 
     /// <summary>
@@ -279,6 +305,10 @@ public class SqlGenerator(
         statements.Add(new SqlStatement("create_schema", invalid,
             $"CREATE SCHEMA IF NOT EXISTS \"{invalid}\";"));
 
+        // Metadata schema
+        statements.Add(new SqlStatement("create_schema", "metadata",
+            "CREATE SCHEMA IF NOT EXISTS \"metadata\";"));
+
         // Raw table import
         statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));
 
@@ -294,6 +324,9 @@ public class SqlGenerator(
             statements.Add(new SqlStatement("create_quarantine_view", SafeTablePart, quarantineSql));
             statements.Add(new SqlStatement("insert_quarantine_log", SafeTablePart, metadataSql));
         }
+
+        // Table load metadata
+        statements.Add(new SqlStatement("insert_table_load", SafeTablePart, BuildTableLoadMetadataSql()));
 
         return statements;
     }
