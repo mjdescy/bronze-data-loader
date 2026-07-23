@@ -262,13 +262,17 @@ public class SqlGenerator(
     /// Build a helper that extracts the raw schema parts, file name, and escaped file path
     /// for use in metadata SQL statements.
     /// </summary>
+    /// <remarks>
+    /// TODO: Migrate metadata INSERT/UPDATE to <c>DuckDBParameter</c>-based commands
+    /// to eliminate SQL injection risk entirely instead of relying on string escaping.
+    /// </remarks>
     private (string RawSchema, string RawTableName, string FileName, string EscapedFilePath) GetMetadataParts()
     {
         var rawSchemaParts = RawTableName.Split('.');
         var rawSchema = rawSchemaParts[0];
         var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
-        var fileName = Path.GetFileName(FilePath);
-        var filePath = FilePath.Replace("'", "''");
+        var fileName = EscapeSingleQuotes(Path.GetFileName(FilePath));
+        var filePath = EscapeSingleQuotes(FilePath);
         return (rawSchema, rawTableName, fileName, filePath);
     }
 
