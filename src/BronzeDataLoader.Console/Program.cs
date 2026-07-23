@@ -173,7 +173,7 @@ manifest_path: "data-call-manifest.csv"
 data_folder: "data"
 contracts_folder: "contacts"
 output_folder: "output"
-database_path: "database"
+database_path: "bronze-database"
 """;
     File.WriteAllText(configPath, configContent);
 }

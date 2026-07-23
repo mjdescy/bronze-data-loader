@@ -64,7 +64,11 @@ public record AppConfig
         var dataFolder = ResolvePath(rawConfig.DataFolder ?? ".", configDir);
         var contractsFolder = ResolvePath(rawConfig.ContractsFolder ?? ".", configDir);
         var outputFolder = ResolvePath(rawConfig.OutputFolder ?? ".", configDir);
-        var databasePath = ResolveDatabasePath(rawConfig.DatabasePath ?? ".", configDir);
+
+        // Resolve the database path relative to the output folder so the database
+        // is always placed among the other output artifacts.
+        Directory.CreateDirectory(outputFolder);
+        var databasePath = ResolveDatabasePath(rawConfig.DatabasePath ?? ".", outputFolder);
 
         var conn = new DuckDBConnection($"DataSource={databasePath}");
         conn.Open();
