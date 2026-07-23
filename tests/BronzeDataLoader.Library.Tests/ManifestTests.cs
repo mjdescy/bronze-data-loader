@@ -608,10 +608,10 @@ columns: []
         [Fact]
         public void GenerateAndExecuteSql_ExtraColumns_ProducesWarning()
         {
-            // Capture console output
+            // Capture stderr — warnings go to Console.Error
             var stringWriter = new StringWriter();
-            var originalOut = System.Console.Out;
-            System.Console.SetOut(stringWriter);
+            var originalErr = System.Console.Error;
+            System.Console.SetError(stringWriter);
 
             try
             {
@@ -660,16 +660,17 @@ columns: []
             }
             finally
             {
-                System.Console.SetOut(originalOut);
+                System.Console.SetError(originalErr);
             }
         }
 
         [Fact]
         public void GenerateAndExecuteSql_MissingRequired_Quarantines()
         {
+            // Capture stderr — quarantine notifications go to Console.Error
             var stringWriter = new StringWriter();
-            var originalOut = System.Console.Out;
-            System.Console.SetOut(stringWriter);
+            var originalErr = System.Console.Error;
+            System.Console.SetError(stringWriter);
 
             try
             {
@@ -738,7 +739,7 @@ columns: []
             }
             finally
             {
-                System.Console.SetOut(originalOut);
+                System.Console.SetError(originalErr);
             }
         }
     }

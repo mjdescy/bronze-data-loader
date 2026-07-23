@@ -154,6 +154,7 @@ public class CliEndToEndTests
             Assert.Contains("Processed", stdOut);
             Assert.DoesNotContain("Error", stdOut);
             Assert.DoesNotContain("Quarantined", stdOut);
+            Assert.DoesNotContain("Error processing", stdOut);
         }
         finally
         {
@@ -168,10 +169,13 @@ public class CliEndToEndTests
         try
         {
             var configPath = SetupFullPipeline(dir, missingRequiredCol: true);
-            var (exitCode, stdOut, _) = RunConsole($"load \"{configPath}\"");
+            var (exitCode, stdOut, stdErr) = RunConsole($"load \"{configPath}\"");
 
             Assert.Equal(0, exitCode);
-            Assert.Contains("Quarantined", stdOut);
+            // Quarantine notifications go to stderr (diagnostics channel)
+            Assert.Contains("Quarantined", stdErr);
+            // No error-level output should appear in stdout
+            Assert.DoesNotContain("Quarantined", stdOut);
         }
         finally
         {

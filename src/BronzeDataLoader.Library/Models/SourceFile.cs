@@ -69,7 +69,7 @@ public record SourceFile
 
             foreach (var warning in warnings)
             {
-                Console.WriteLine($"Warning: {warning}");
+                Console.Error.WriteLine($"Warning: {warning}");
             }
         }
         catch (InvalidOperationException ex)
@@ -77,7 +77,7 @@ public record SourceFile
             var (quarantineSql, metadataSql) = sqlGenerator.BuildQuarantineSql(ex.Message);
             ExecuteNonQuery(connection, quarantineSql);
             ExecuteNonQuery(connection, metadataSql);
-            Console.WriteLine($"Quarantined {FilePath}: {ex.Message}");
+            Console.Error.WriteLine($"Quarantined {FilePath}: {ex.Message}");
         }
     }
 

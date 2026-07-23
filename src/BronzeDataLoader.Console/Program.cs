@@ -132,7 +132,7 @@ static int RunLoad(LoadOptions opts)
                 }
                 catch (Exception ex)
                 {
-                    SysConsole.WriteLine($"Error processing {sourceFile.FilePath}: {ex.Message}");
+                    SysConsole.Error.WriteLine($"Error processing {sourceFile.FilePath}: {ex.Message}");
                 }
             }
 
