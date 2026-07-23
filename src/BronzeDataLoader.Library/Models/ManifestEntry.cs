@@ -25,11 +25,11 @@ public record ManifestEntry
     /// <param name="appConfig">Application configuration.</param>
     /// <returns>Matching file paths.</returns>
     /// <exception cref="DirectoryNotFoundException">Source folder does not exist.</exception>
+    /// <exception cref="UnauthorizedAccessException">Path resolves outside the allowed base directory.</exception>
     public string[] MatchingFiles(AppConfig appConfig)
     {
-        var sourceFolder = Path.IsPathRooted(SourceFolder)
-            ? SourceFolder
-            : Path.Combine(appConfig.DataFolder, SourceFolder);
+        var sourceFolder = ResolveAndSandboxPath(
+            SourceFolder, appConfig.DataFolder, nameof(SourceFolder));
 
         if (!Directory.Exists(sourceFolder))
             throw new DirectoryNotFoundException($"Source folder does not exist: {sourceFolder}");
@@ -45,16 +45,42 @@ public record ManifestEntry
     /// <param name="appConfig">Application configuration.</param>
     /// <returns>The loaded <see cref="Contract"/>.</returns>
     /// <exception cref="FileNotFoundException">The contract file does not exist.</exception>
+    /// <exception cref="UnauthorizedAccessException">Path resolves outside the allowed base directory.</exception>
     public Contract.Contract ResolveContract(AppConfig appConfig)
     {
-        var contractPath = Path.IsPathRooted(Contract)
-            ? Contract
-            : Path.Combine(appConfig.ContractsFolder, Contract);
+        var contractPath = ResolveAndSandboxPath(
+            Contract, appConfig.ContractsFolder, nameof(Contract));
 
         if (!File.Exists(contractPath))
             throw new FileNotFoundException($"Contract file not found: {contractPath}", contractPath);
 
         return ContractFile.FromYaml(contractPath);
+    }
+
+    /// <summary>
+    /// Resolve a path (relative to <paramref name="baseDir"/> or absolute) and verify
+    /// it stays within <paramref name="baseDir"/>. This prevents path traversal attacks
+    /// via manifest entries like <c>../../../etc</c> or absolute paths like <c>/etc</c>.
+    /// </summary>
+    private static string ResolveAndSandboxPath(string path, string baseDir, string fieldName)
+    {
+        var resolved = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(baseDir, path));
+
+        var baseFull = Path.GetFullPath(baseDir);
+
+        // Ensure resolved path is within baseDir
+        var relative = Path.GetRelativePath(baseFull, resolved);
+        if (relative.StartsWith("..") || Path.IsPathRooted(relative))
+        {
+            throw new UnauthorizedAccessException(
+                $"Manifest entry '{fieldName}' path '{path}' resolves outside the allowed directory " +
+                $"'{baseFull}'. Use a path within the base directory, forward slashes, " +
+                $"or single-quoted YAML strings for Windows backslash paths.");
+        }
+
+        return resolved;
     }
 
     /// <summary>
