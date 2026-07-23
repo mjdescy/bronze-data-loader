@@ -282,6 +282,29 @@ public class SqlGeneratorTests
                 if (Directory.Exists(dir)) Directory.Delete(dir);
             }
         }
+
+        [Fact]
+        public void FilePathWithSingleQuote_EscapesCorrectly()
+        {
+            using var conn = CreateInMemoryConnection();
+            // Path with a single quote — must be escaped in SQL to avoid injection
+            var csvPath = Path.Combine(Path.GetTempPath(), "O'Brien_export.csv");
+            File.WriteAllText(csvPath, "a,b\n1,2\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                var sql = gen.BuildReadFunctionCall();
+
+                // The path should have its single quote escaped (doubled)
+                Assert.Contains("O''Brien", sql);
+                // The path should NOT contain an unescaped single quote
+                Assert.DoesNotContain("O'Brien", sql);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
     }
 
     // ===== Raw Load SQL Tests =====

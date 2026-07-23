@@ -87,6 +87,12 @@ public class SqlGenerator(
     /// <summary>Escape double quotes within an identifier by doubling them.</summary>
     private static string EscapeQuotes(string value) => value.Replace("\"", "\"\"");
 
+    /// <summary>
+    /// Escape single quotes within a SQL string literal by doubling them.
+    /// This is defense-in-depth; DuckDBParameter is preferred for values.
+    /// </summary>
+    private static string EscapeSingleQuotes(string value) => value.Replace("'", "''");
+
     /// <summary>Build CREATE SCHEMA IF NOT EXISTS statements for all contract schemas.</summary>
     public string BuildCreateSchemaIfNotExists()
     {
@@ -108,11 +114,13 @@ public class SqlGenerator(
     {
         var extension = Path.GetExtension(FilePath).ToLowerInvariant();
 
+        var safePath = EscapeSingleQuotes(FilePath);
+
         return extension switch
         {
-            ".csv" => $"read_csv('{FilePath}', header=true, all_varchar=true)",
-            ".tsv" => $"read_csv('{FilePath}', header=true, delim='\\t', all_varchar=true)",
-            ".xlsx" => $"read_xlsx('{FilePath}', header=true)",
+            ".csv" => $"read_csv('{safePath}', header=true, all_varchar=true)",
+            ".tsv" => $"read_csv('{safePath}', header=true, delim='\\t', all_varchar=true)",
+            ".xlsx" => $"read_xlsx('{safePath}', header=true)",
             _ => throw new InvalidOperationException($"Unsupported source format: {extension}"),
         };
     }
