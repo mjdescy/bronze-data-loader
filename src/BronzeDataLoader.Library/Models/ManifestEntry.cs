@@ -7,6 +7,12 @@ namespace BronzeDataLoader.Library.Models;
 /// </summary>
 public record ManifestEntry
 {
+    /// <summary>
+    /// Maximum number of files a single manifest entry can match.
+    /// Prevents denial-of-service via excessive file enumeration
+    /// (e.g., pointing at a large directory tree).
+    /// </summary>
+    private const int MaxFilesPerEntry = 10_000;
     /// <summary>The submitter/owner of the data.</summary>
     public string Submitter { get; init; } = string.Empty;
 
@@ -34,9 +40,22 @@ public record ManifestEntry
         if (!Directory.Exists(sourceFolder))
             throw new DirectoryNotFoundException($"Source folder does not exist: {sourceFolder}");
 
-        return Directory.GetFiles(sourceFolder, FilePattern, SearchOption.AllDirectories)
+        // Enumerate with a hard cap to prevent DoS from large directory trees.
+        // Take(MaxFilesPerEntry + 1) lets us detect if the limit was exceeded.
+        var files = Directory.EnumerateFiles(sourceFolder, FilePattern, SearchOption.AllDirectories)
+            .Take(MaxFilesPerEntry + 1)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+        if (files.Length > MaxFilesPerEntry)
+        {
+            throw new InvalidOperationException(
+                $"Pattern '{FilePattern}' in '{sourceFolder}' matched more than " +
+                $"{MaxFilesPerEntry} files. Narrow your file pattern or split into " +
+                "multiple manifest entries.");
+        }
+
+        return files;
     }
 
     /// <summary>
