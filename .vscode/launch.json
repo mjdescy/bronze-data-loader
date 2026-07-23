@@ -1,5 +1,5 @@
 {
-    "version": "0.2.0",
+    "version": "2.0",
     "configurations": [
         {
             // Launch the console app with optional arguments
@@ -21,7 +21,9 @@
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/${workspaceFolderBasename}.Console/bin/Debug/net10.0/${workspaceFolderBasename}.Console.dll",
-            "args": ["--help"],
+            "args": [
+                "--help"
+            ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
