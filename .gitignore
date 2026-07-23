@@ -483,3 +483,7 @@ $RECYCLE.BIN/
 
 # Private folder
 .private/
+
+# Example output — keep only the .gitkeep placeholder
+example/output/*
+!example/output/.gitkeep

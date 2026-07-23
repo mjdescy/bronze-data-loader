@@ -1,4 +1,4 @@
-cust_id	signup_date	email
-B2001	2026-02-03	ana@beta.example
-B2002	2026-02-11	ben@beta.example
-B2003	2026-02-20	
+email	signup_date	cust_id
+ana@beta.example	2026-02-03	B2001
+ben@beta.example	2026-02-11	B2002
+	2026-02-20	B2003

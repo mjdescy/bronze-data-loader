@@ -13,6 +13,6 @@ columns:
     type: DATE
     required: true
   - canonical: email
-    accepts: [email, Email, email_address]
+    accepts: [email, E-mail, email_address]
     type: VARCHAR
     required: false

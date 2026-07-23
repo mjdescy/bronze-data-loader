@@ -1,0 +1,6 @@
+customer_id,signup_date,email
+A1039,2026-12-31,nye@acme.example
+A1040,2026-01-01,
+A1041,2025-06-15,old@acme.example
+A1042,2026-02-29,leap@acme.example
+A1043,2026-07-04,july@acme.example
