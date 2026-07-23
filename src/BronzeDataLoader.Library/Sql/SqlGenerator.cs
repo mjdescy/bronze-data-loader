@@ -251,37 +251,59 @@ public class SqlGenerator(
     }
 
     /// <summary>
-    /// Build an INSERT INTO <c>metadata.table_load</c> statement using a COUNT(*) subquery
-    /// for the row count. Used in SQL generation mode where the row count is not known upfront.
+    /// Build a helper that extracts the raw schema parts, file name, and escaped file path
+    /// for use in metadata SQL statements.
     /// </summary>
-    public string BuildTableLoadMetadataSql()
+    private (string RawSchema, string RawTableName, string FileName, string EscapedFilePath) GetMetadataParts()
     {
-        var rawQuoted = QuoteQualified(RawTableName);
         var rawSchemaParts = RawTableName.Split('.');
         var rawSchema = rawSchemaParts[0];
         var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
         var fileName = Path.GetFileName(FilePath);
         var filePath = FilePath.Replace("'", "''");
-
-        return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, row_count)\n" +
-               $"SELECT '{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', COUNT(*) FROM {rawQuoted};";
+        return (rawSchema, rawTableName, fileName, filePath);
     }
 
     /// <summary>
-    /// Build an INSERT INTO <c>metadata.table_load</c> statement with a known row count.
-    /// Used in direct execution mode where the row count has already been computed.
+    /// Build an INSERT INTO <c>metadata.table_load</c> statement with a NULL row_count.
+    /// Used before the raw load attempt to provide negative tracking — if the load fails,
+    /// the row remains with NULL row_count, indicating a failed load.
     /// </summary>
-    /// <param name="rowCount">The number of rows in the imported table.</param>
-    public string BuildTableLoadMetadataSql(long rowCount)
+    public string BuildInsertTableLoadMetadataSql()
     {
-        var rawSchemaParts = RawTableName.Split('.');
-        var rawSchema = rawSchemaParts[0];
-        var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
-        var fileName = Path.GetFileName(FilePath);
-        var filePath = FilePath.Replace("'", "''");
+        var (rawSchema, rawTableName, fileName, filePath) = GetMetadataParts();
 
         return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, row_count)\n" +
-               $"VALUES ('{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', {rowCount});";
+               $"VALUES ('{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', NULL);";
+    }
+
+    /// <summary>
+    /// Build an UPDATE statement for <c>metadata.table_load</c> to set the row_count
+    /// on a successful load. Matches the row by file_path and NULL row_count
+    /// so that only the pre-load insertion (from <see cref="BuildInsertTableLoadMetadataSql"/>)
+    /// is updated.
+    /// </summary>
+    /// <param name="rowCount">The number of rows in the imported table.</param>
+    public string BuildUpdateTableLoadMetadataSql(long rowCount)
+    {
+        var (rawSchema, rawTableName, fileName, filePath) = GetMetadataParts();
+
+        return $"UPDATE \"metadata\".\"table_load\" SET row_count = {rowCount}\n" +
+               $"WHERE table_schema = '{rawSchema}'\n" +
+               $"  AND table_name = '{rawTableName}'\n" +
+               $"  AND file_path = '{filePath}'\n" +
+               $"  AND row_count IS NULL;";
+    }
+
+    /// <summary>
+    /// Build a CREATE OR REPLACE VIEW for failed loads, selecting rows from
+    /// <c>metadata.table_load</c> where <c>row_count IS NULL</c>.
+    /// </summary>
+    public string BuildCreateFailedLoadsViewSql()
+    {
+        return "CREATE OR REPLACE VIEW \"metadata\".\"v_failed_loads\" AS\n" +
+               "SELECT * FROM \"metadata\".\"table_load\"\n" +
+               "WHERE row_count IS NULL;";
     }
 
     /// <summary>
@@ -325,8 +347,11 @@ public class SqlGenerator(
             statements.Add(new SqlStatement("insert_quarantine_log", SafeTablePart, metadataSql));
         }
 
-        // Table load metadata
-        statements.Add(new SqlStatement("insert_table_load", SafeTablePart, BuildTableLoadMetadataSql()));
+        // Failed-loads view
+        statements.Add(new SqlStatement("create_view", "v_failed_loads", BuildCreateFailedLoadsViewSql()));
+
+        // Table load metadata (INSERT with NULL row_count for negative tracking)
+        statements.Add(new SqlStatement("insert_table_load", SafeTablePart, BuildInsertTableLoadMetadataSql()));
 
         return statements;
     }

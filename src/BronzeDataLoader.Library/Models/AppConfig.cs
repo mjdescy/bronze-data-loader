@@ -100,6 +100,13 @@ public record AppConfig
             """;
         cmd.ExecuteNonQuery();
 
+        cmd.CommandText = """
+            CREATE OR REPLACE VIEW "metadata"."v_failed_loads" AS
+            SELECT * FROM "metadata"."table_load"
+            WHERE row_count IS NULL;
+            """;
+        cmd.ExecuteNonQuery();
+
         return new AppConfig
         {
             ManifestPath = manifestPath,

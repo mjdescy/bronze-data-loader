@@ -724,8 +724,8 @@ public class SqlGeneratorTests
 
                 var statements = gen.CollectStatements();
 
-                // 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 table_load = 7
-                Assert.Equal(7, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 failed-loads view + 1 table_load = 8
+                Assert.Equal(8, statements.Count);
 
                 Assert.Equal("create_schema", statements[0].Operation);
                 Assert.Equal("bronze_raw", statements[0].ObjectName);
@@ -746,9 +746,15 @@ public class SqlGeneratorTests
                 Assert.Equal("create_view", statements[5].Operation);
                 Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
 
-                Assert.Equal("insert_table_load", statements[6].Operation);
-                Assert.Contains("INSERT INTO", statements[6].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[6].Sql);
+                Assert.Equal("create_view", statements[6].Operation);
+                Assert.Equal("v_failed_loads", statements[6].ObjectName);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[6].Sql);
+                Assert.Contains("row_count IS NULL", statements[6].Sql);
+
+                Assert.Equal("insert_table_load", statements[7].Operation);
+                Assert.Contains("INSERT INTO", statements[7].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[7].Sql);
+                Assert.Contains("NULL", statements[7].Sql);
             }
             finally
             {
@@ -781,8 +787,9 @@ public class SqlGeneratorTests
 
                 var statements = gen.CollectStatements();
 
-                // 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view + 1 quarantine_log + 1 table_load = 8
-                Assert.Equal(8, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view
+                // + 1 quarantine_log + 1 failed-loads view + 1 table_load = 9
+                Assert.Equal(9, statements.Count);
 
                 Assert.Equal("create_quarantine_view", statements[5].Operation);
                 Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
@@ -791,9 +798,15 @@ public class SqlGeneratorTests
                 Assert.Contains("INSERT INTO", statements[6].Sql);
                 Assert.Contains("\"metadata\".\"quarantine\"", statements[6].Sql);
 
-                Assert.Equal("insert_table_load", statements[7].Operation);
-                Assert.Contains("INSERT INTO", statements[7].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[7].Sql);
+                Assert.Equal("create_view", statements[7].Operation);
+                Assert.Equal("v_failed_loads", statements[7].ObjectName);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[7].Sql);
+                Assert.Contains("row_count IS NULL", statements[7].Sql);
+
+                Assert.Equal("insert_table_load", statements[8].Operation);
+                Assert.Contains("INSERT INTO", statements[8].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[8].Sql);
+                Assert.Contains("NULL", statements[8].Sql);
             }
             finally
             {

@@ -540,8 +540,9 @@ columns:
                 // Verify files
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 table_load = 7 files
-                Assert.Equal(7, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 view
+                //              + 1 failed-loads view + 1 table_load = 8 files
+                Assert.Equal(8, sqlFiles.Length);
 
                 // Verify ordering and naming
                 Assert.StartsWith("001_create_schema_bronze_raw", Path.GetFileName(sqlFiles[0]));
@@ -550,7 +551,8 @@ columns:
                 Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
                 Assert.StartsWith("005_create_table_t_Test_", Path.GetFileName(sqlFiles[4]));
                 Assert.StartsWith("006_create_view_t_Test_", Path.GetFileName(sqlFiles[5]));
-                Assert.StartsWith("007_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[6]));
+                Assert.StartsWith("007_create_view_v_failed_loads", Path.GetFileName(sqlFiles[6]));
+                Assert.StartsWith("008_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[7]));
 
                 // Verify SQL content
                 var tableSql = File.ReadAllText(sqlFiles[4]);
@@ -562,7 +564,12 @@ columns:
                 Assert.Contains("SELECT", viewSql);
                 Assert.Contains("FROM", viewSql);
 
-                var metadataLoadSql = File.ReadAllText(sqlFiles[6]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[6]);
+                Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
+                Assert.Contains("v_failed_loads", failedLoadsViewSql);
+                Assert.Contains("row_count IS NULL", failedLoadsViewSql);
+
+                var metadataLoadSql = File.ReadAllText(sqlFiles[7]);
                 Assert.Contains("INSERT INTO", metadataLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", metadataLoadSql);
             }
@@ -652,15 +659,17 @@ columns:
 
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view + 1 quarantine_log + 1 table_load = 8
-                Assert.Equal(8, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view
+                //              + 1 quarantine_log + 1 failed-loads view + 1 table_load = 9
+                Assert.Equal(9, sqlFiles.Length);
 
                 // Verify file order
                 Assert.StartsWith("001_create_schema_", Path.GetFileName(sqlFiles[0]));
                 Assert.StartsWith("005_create_table_", Path.GetFileName(sqlFiles[4]));
                 Assert.Contains("create_quarantine_view", sqlFiles[5]);
                 Assert.Contains("insert_quarantine_log", sqlFiles[6]);
-                Assert.Contains("insert_table_load", sqlFiles[7]);
+                Assert.Contains("create_view_v_failed_loads", sqlFiles[7]);
+                Assert.Contains("insert_table_load", sqlFiles[8]);
 
                 var quarantineViewSql = File.ReadAllText(sqlFiles[5]);
                 Assert.Contains("CREATE OR REPLACE VIEW", quarantineViewSql);
@@ -670,7 +679,12 @@ columns:
                 Assert.Contains("INSERT INTO", logSql);
                 Assert.Contains("\"metadata\".\"quarantine\"", logSql);
 
-                var tableLoadSql = File.ReadAllText(sqlFiles[7]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[7]);
+                Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
+                Assert.Contains("v_failed_loads", failedLoadsViewSql);
+                Assert.Contains("row_count IS NULL", failedLoadsViewSql);
+
+                var tableLoadSql = File.ReadAllText(sqlFiles[8]);
                 Assert.Contains("INSERT INTO", tableLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", tableLoadSql);
             }

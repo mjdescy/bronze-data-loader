@@ -49,16 +49,18 @@ public record SourceFile
                 quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """);
+        ExecuteNonQuery(connection, sqlGenerator.BuildCreateFailedLoadsViewSql());
+
+        // Insert row with NULL row_count BEFORE load (negative tracking).
+        // If the load fails, this row persists with NULL, indicating a failed load.
+        ExecuteNonQuery(connection, sqlGenerator.BuildInsertTableLoadMetadataSql());
 
         var rawSql = sqlGenerator.BuildRawLoadSql();
         ExecuteNonQuery(connection, rawSql);
 
-        // Compute row count for metadata
+        // Compute row count for metadata and update the placeholder row
         var rowCount = GetRowCount(connection, sqlGenerator.RawTableName);
-
-        // Insert table load metadata
-        var metadataInsertSql = sqlGenerator.BuildTableLoadMetadataSql(rowCount);
-        ExecuteNonQuery(connection, metadataInsertSql);
+        ExecuteNonQuery(connection, sqlGenerator.BuildUpdateTableLoadMetadataSql(rowCount));
 
         try
         {
