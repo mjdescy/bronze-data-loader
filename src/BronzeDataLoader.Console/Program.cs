@@ -169,11 +169,11 @@ static void GenerateConfig(string outputFolder)
 {
     var configPath = Path.Combine(outputFolder, "config.yaml");
     var configContent = """
-manifest_path: "data-call-manifest.csv"
+manifest_path: "manifest.csv"
 data_folder: "data"
 contracts_folder: "contacts"
 output_folder: "output"
-database_name: "bronze-database"
+database_name: "warehouse.duckdb"
 """;
     File.WriteAllText(configPath, configContent);
 }

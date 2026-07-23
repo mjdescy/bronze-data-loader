@@ -48,14 +48,14 @@ bronze-data-loader new contract --output-folder .
 bronze-data-loader new manifest --output-folder .
 ```
 
-Edit the "config.yaml" file in your favorite editor. It will look like this:
+Edit the "config.yaml" file in your favorite editor. All file and folder paths are interpreted as relative to the config.yaml file. It will look like this:
 
 ```yaml
-manifest_path: "manifest.csv" # default "manifest.csv"
-data_folder: "data"           # default "." for current working directory
-contracts_folder: "contracts" # default "." for current working directory
-output_folder: "output"       # default "." for current working directory
-database_path: "database"     # default "." for current working directory
+manifest_path: "manifest.csv"     # relative to config.yaml
+data_folder: "data"               # relative to config.yaml
+contracts_folder: "contracts"     # relative to config.yaml
+output_folder: "output"           # relative to config.yaml
+database_name: "warehouse.duckdb" # relative to output_folder).
 ```
 
 The values in "manifest.csv" drive what data files are imported and what contract is applied to each data file. Edit the "manifest.csv" file in your favorite text editor or spreadsheet program. It has the following structure:
@@ -69,11 +69,11 @@ Source files can be defined as file patterns with wildcards (?, *). Tables for s
 
 Only the following data file types are supported. The file extension is used to determine how to read the file.
 
-| Extension | Reader                            |
-| --------- | --------------------------------- |
-| `.csv`    | `read_csv()` with `all_varchar`   |
-| `.tsv`    | `read_csv()` with tab delimiter   |
-| `.xlsx`   | `read_xlsx()` with header         |
+| Extension | Reader                          |
+| --------- | ------------------------------- |
+| `.csv`    | `read_csv()` with `all_varchar` |
+| `.tsv`    | `read_csv()` with tab delimiter |
+| `.xlsx`   | `read_xlsx()` with header       |
 
 A contract defines the field listing for the data file, its destination table name, and the destination table's schema in the database. The final destination table name is defined in the contract file, and the submitter and file stem hash are appended to the table name to create a unique table name for each source file.
 
