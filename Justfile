@@ -12,6 +12,10 @@ rid := `dotnet --info 2>/dev/null | sed -n 's/^ *RID: *//p'`
 # Recipes
 # ============================================================================
 
+# List available recipes (default — shown when you run `just` with no recipe)
+list:
+    @just --list
+
 # Run the console app (passes all remaining arguments through)
 run *args:
     dotnet run --project src/BronzeDataLoader.Console -- {{args}}
@@ -19,6 +23,10 @@ run *args:
 # Run all tests (restores if needed)
 test:
     dotnet test
+
+# Run the console load command using the configuration in example/
+example *args:
+    dotnet run --project src/BronzeDataLoader.Console -- load example/config.yaml {{args}}
 
 # Build in Release configuration
 release:
@@ -60,8 +68,4 @@ publish-osx:
         -p:PublishSingleFile=true \
         -o publish/osx-x64
 
-# ============================================================================
-# Help (default recipe — shown when you run `just` with no recipe)
-# ============================================================================
-_default:
-    @just --list
+
