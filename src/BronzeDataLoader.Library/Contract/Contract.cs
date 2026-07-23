@@ -32,6 +32,8 @@ public record Contract
 
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .WithMaximumRecursion(10)
             .Build();
 
         return deserializer.Deserialize<Contract>(yaml);

@@ -48,11 +48,15 @@ schema_quarantine: "bronze_quarantine"
     [Fact]
     public void FromYaml_WindowsStyleBackslashesInQuotedPaths_AreParsed()
     {
+        // Note: Use single-quoted YAML strings for paths with backslashes.
+        // Single-quoted strings treat \ as a literal, avoiding YAML escape
+        // conflicts (e.g. \f = form feed, \n = newline). Forward slashes
+        // also work everywhere in .NET's Path methods.
         var yaml = """
-manifest_path: "manifest\file.csv"
-data_folder: "nested\folder"
-contracts_folder: "contracts\sub"
-output_folder: "output\sub"
+manifest_path: 'manifest\file.csv'
+data_folder: 'nested\folder'
+contracts_folder: 'contracts\sub'
+output_folder: 'output\sub'
 database_name: ":memory:"
 """;
 
