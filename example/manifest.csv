@@ -1,3 +1,3 @@
 ﻿submitter,source_folder,file_pattern,contract
-"Acme, Inc.",Acme/data-in,customer*.txt,contract_customer.yaml
+"Acme, Inc.",Acme/data-in,customer*.csv,contract_customer.yaml
 "Beta, LLC",Beta/data-in,customer*.tsv,contract_customer.yaml
