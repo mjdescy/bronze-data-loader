@@ -295,7 +295,7 @@ manifest_path: "{rootDir}/manifest.csv"
 data_folder: "{rootDir}"
 contracts_folder: "{rootDir}"
 output_folder: "{outputDir}"
-database_path: ":memory:"
+database_name: ":memory:"
 """);
 
         // contract_customer.yaml

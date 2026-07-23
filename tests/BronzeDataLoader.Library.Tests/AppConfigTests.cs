@@ -10,7 +10,7 @@ manifest_path: "test-manifest.csv"
 data_folder: "test-data"
 contracts_folder: "test-contracts"
 output_folder: "test-output"
-database_path: ":memory:"
+database_name: ":memory:"
 raw_schema: "bronze_raw"
 schema: "bronze"
 schema_quarantine: "bronze_quarantine"
@@ -30,7 +30,7 @@ schema_quarantine: "bronze_quarantine"
             Assert.EndsWith("test-data", appConfig.DataFolder);
             Assert.EndsWith("test-contracts", appConfig.ContractsFolder);
             Assert.EndsWith("test-output", appConfig.OutputFolder);
-            Assert.EndsWith(":memory:", appConfig.DatabasePath);
+            Assert.EndsWith(":memory:", appConfig.DatabaseName);
             Assert.Equal("bronze_raw", appConfig.RawSchema);
             Assert.Equal("bronze", appConfig.Schema);
             Assert.Equal("bronze_quarantine", appConfig.SchemaQuarantine);
@@ -53,7 +53,7 @@ manifest_path: "manifest\file.csv"
 data_folder: "nested\folder"
 contracts_folder: "contracts\sub"
 output_folder: "output\sub"
-database_path: ":memory:"
+database_name: ":memory:"
 """;
 
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -94,7 +94,7 @@ manifest_path: "manifest.csv"
 data_folder: "data"
 contracts_folder: "contracts"
 output_folder: "output"
-database_path: ":memory:"
+database_name: ":memory:"
 """;
 
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -134,7 +134,7 @@ database_path: ":memory:"
             $"data_folder: \"{dataInput}\"\n" +
             $"contracts_folder: \"{contractsInput}\"\n" +
             $"output_folder: \"{outputInput}\"\n" +
-            "database_path: \":memory:\"\n";
+            "database_name: \":memory:\"\n";
 
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(dir);

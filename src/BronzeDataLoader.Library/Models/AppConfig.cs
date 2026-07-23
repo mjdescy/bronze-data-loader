@@ -22,8 +22,8 @@ public record AppConfig
     /// <summary>Output folder for generated artifacts.</summary>
     public string OutputFolder { get; init; } = ".";
 
-    /// <summary>Path to the DuckDB database file.</summary>
-    public string DatabasePath { get; init; } = ".";
+    /// <summary>Name of the DuckDB database file (placed inside <see cref="OutputFolder"/>).</summary>
+    public string DatabaseName { get; init; } = "bronze-database";
 
     /// <summary>Default raw/staging schema name.</summary>
     public string RawSchema { get; init; } = "bronze_raw";
@@ -65,10 +65,13 @@ public record AppConfig
         var contractsFolder = ResolvePath(rawConfig.ContractsFolder ?? ".", configDir);
         var outputFolder = ResolvePath(rawConfig.OutputFolder ?? ".", configDir);
 
-        // Resolve the database path relative to the output folder so the database
-        // is always placed among the other output artifacts.
+        // The database is always placed inside the output folder.
+        // :memory: is a special value that bypasses file creation.
         Directory.CreateDirectory(outputFolder);
-        var databasePath = ResolveDatabasePath(rawConfig.DatabasePath ?? ".", outputFolder);
+        var databaseName = rawConfig.DatabaseName ?? "bronze-database";
+        var databasePath = string.Equals(databaseName, ":memory:", StringComparison.OrdinalIgnoreCase)
+            ? databaseName
+            : Path.Combine(outputFolder, databaseName);
 
         var conn = new DuckDBConnection($"DataSource={databasePath}");
         conn.Open();
@@ -117,7 +120,7 @@ public record AppConfig
             DataFolder = dataFolder,
             ContractsFolder = contractsFolder,
             OutputFolder = outputFolder,
-            DatabasePath = databasePath,
+            DatabaseName = databaseName,
             RawSchema = rawConfig.RawSchema ?? "bronze_raw",
             Schema = rawConfig.Schema ?? "bronze",
             SchemaQuarantine = rawConfig.SchemaQuarantine ?? "bronze_quarantine",
@@ -168,14 +171,6 @@ public record AppConfig
             : Path.GetFullPath(Path.Combine(configDir, path));
     }
 
-    private static string ResolveDatabasePath(string path, string configDir)
-    {
-        if (string.Equals(path, ":memory:", StringComparison.OrdinalIgnoreCase))
-            return path;
-
-        return ResolvePath(path, configDir);
-    }
-
     // ReSharper disable once ClassNeverInstantiated.Local
     private sealed record AppConfigRaw
     {
@@ -183,7 +178,7 @@ public record AppConfig
         public string? DataFolder { get; init; }
         public string? ContractsFolder { get; init; }
         public string? OutputFolder { get; init; }
-        public string? DatabasePath { get; init; }
+        public string? DatabaseName { get; init; }
         public string? RawSchema { get; init; }
         public string? Schema { get; init; }
         public string? SchemaQuarantine { get; init; }
