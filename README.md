@@ -102,6 +102,42 @@ bronze-data-loader load example/config.yaml
 
 The program will output a DuckDB database that contains the following:
 
-1. Tables for all matching source files in the "bronze_raw" schema.
-2. Views for all source files that conform to their contracts in the "bronze" schema.
-3. Views for all source files that do not conform to their contracts in the "bronze_quarantine" schema.
+1. Tables for all matching source files in the `bronze_raw` schema.
+2. Views for all source files that conform to their contracts in the `bronze` schema.
+3. Views for all source files that do not conform to their contracts in the `bronze_quarantine` schema.
+4. Tracking tables and views in the `metadata` schema (see below).
+
+## Metadata Schema
+
+The `metadata` schema tracks every import operation and provides visibility into load failures.
+
+### `metadata.table_load`
+
+Records each raw table import, one row per source file. A row is inserted **before** the load begins (with `row_count = NULL`) and updated with the actual count **after** a successful load. If the load fails, the row stays with `NULL`, marking a failed attempt.
+
+| Column | Type | Description |
+|---|---|---|
+| `table_schema` | `VARCHAR` | The schema containing the imported table (e.g. `bronze_raw`) |
+| `table_name` | `VARCHAR` | The sanitized unique table name |
+| `file_name` | `VARCHAR` | The source file name only (no path) |
+| `file_path` | `VARCHAR` | The full path to the source file |
+| `imported_at` | `TIMESTAMP` | When the import was attempted (defaults to `CURRENT_TIMESTAMP`) |
+| `row_count` | `BIGINT` | Number of rows loaded, or `NULL` if the load failed |
+
+### `metadata.quarantine`
+
+Records error messages for source files that failed contract validation. Each row describes why a file was quarantined.
+
+| Column | Type | Description |
+|---|---|---|
+| `table_name` | `VARCHAR` | The fully-qualified raw table name |
+| `error_message` | `VARCHAR` | The validation error that triggered quarantine |
+| `quarantined_at` | `TIMESTAMP` | When the quarantine occurred (defaults to `CURRENT_TIMESTAMP`) |
+
+### `metadata.v_failed_loads`
+
+A view that selects rows from `metadata.table_load` where `row_count IS NULL`. Query it to list every file that was attempted but never successfully loaded:
+
+```sql
+SELECT * FROM metadata.v_failed_loads;
+```
