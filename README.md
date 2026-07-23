@@ -62,10 +62,18 @@ The values in "manifest.csv" drive what data files are imported and what contrac
 
 | submitter  | source_folder | file_pattern  | contract               |
 | ---------- | ------------- | ------------- | ---------------------- |
-| Acme, Inc. | Acme/data-in  | customer*.txt | contract_customer.yaml |
+| Acme, Inc. | Acme/data-in  | customer*.csv | contract_customer.yaml |
 | Beta, LLC  | Beta/data-in  | customer*.tsv | contract_customer.yaml |
 
 Source files can be defined as file patterns with wildcards (?, *). Tables for source files are named as follows: `[contract.table]_[submitter]_[file_stem_hash]`.
+
+Only the following data file types are supported. The file extension is used to determine how to read the file.
+
+| Extension | Reader                            |
+| --------- | --------------------------------- |
+| `.csv`    | `read_csv()` with `all_varchar`   |
+| `.tsv`    | `read_csv()` with tab delimiter   |
+| `.xlsx`   | `read_xlsx()` with header         |
 
 A contract defines the field listing for the data file, its destination table name, and the destination table's schema in the database. The final destination table name is defined in the contract file, and the submitter and file stem hash are appended to the table name to create a unique table name for each source file.
 
@@ -115,23 +123,23 @@ The `metadata` schema tracks every import operation and provides visibility into
 
 Records each raw table import, one row per source file. A row is inserted **before** the load begins (with `row_count = NULL`) and updated with the actual count **after** a successful load. If the load fails, the row stays with `NULL`, marking a failed attempt.
 
-| Column | Type | Description |
-|---|---|---|
-| `table_schema` | `VARCHAR` | The schema containing the imported table (e.g. `bronze_raw`) |
-| `table_name` | `VARCHAR` | The sanitized unique table name |
-| `file_name` | `VARCHAR` | The source file name only (no path) |
-| `file_path` | `VARCHAR` | The full path to the source file |
-| `imported_at` | `TIMESTAMP` | When the import was attempted (defaults to `CURRENT_TIMESTAMP`) |
-| `row_count` | `BIGINT` | Number of rows loaded, or `NULL` if the load failed |
+| Column         | Type        | Description                                                     |
+| -------------- | ----------- | --------------------------------------------------------------- |
+| `table_schema` | `VARCHAR`   | The schema containing the imported table (e.g. `bronze_raw`)    |
+| `table_name`   | `VARCHAR`   | The sanitized unique table name                                 |
+| `file_name`    | `VARCHAR`   | The source file name only (no path)                             |
+| `file_path`    | `VARCHAR`   | The full path to the source file                                |
+| `imported_at`  | `TIMESTAMP` | When the import was attempted (defaults to `CURRENT_TIMESTAMP`) |
+| `row_count`    | `BIGINT`    | Number of rows loaded, or `NULL` if the load failed             |
 
 ### `metadata.quarantine`
 
 Records error messages for source files that failed contract validation. Each row describes why a file was quarantined.
 
-| Column | Type | Description |
-|---|---|---|
-| `table_name` | `VARCHAR` | The fully-qualified raw table name |
-| `error_message` | `VARCHAR` | The validation error that triggered quarantine |
+| Column           | Type        | Description                                                    |
+| ---------------- | ----------- | -------------------------------------------------------------- |
+| `table_name`     | `VARCHAR`   | The fully-qualified raw table name                             |
+| `error_message`  | `VARCHAR`   | The validation error that triggered quarantine                 |
 | `quarantined_at` | `TIMESTAMP` | When the quarantine occurred (defaults to `CURRENT_TIMESTAMP`) |
 
 ### `metadata.v_failed_loads`
