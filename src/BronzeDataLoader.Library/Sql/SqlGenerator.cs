@@ -203,12 +203,21 @@ public class SqlGenerator(
             }
 
             string? found = null;
-            foreach (var acceptedName in col.Accepts)
+            // Always treat canonical as if it is the first member of the accepts list,
+            // so it is always recognized as an allowed name even if not listed in accepts.
+            if (actualColsCaseFold.Contains(col.Canonical.Trim().ToLowerInvariant()))
             {
-                if (actualColsCaseFold.Contains(acceptedName.Trim().ToLowerInvariant()))
+                found = col.Canonical;
+            }
+            else
+            {
+                foreach (var acceptedName in col.Accepts)
                 {
-                    found = acceptedName;
-                    break;
+                    if (actualColsCaseFold.Contains(acceptedName.Trim().ToLowerInvariant()))
+                    {
+                        found = acceptedName;
+                        break;
+                    }
                 }
             }
 
@@ -235,7 +244,7 @@ public class SqlGenerator(
 
         // Find extra columns not in the contract
         var acceptedColumnNames = Contract.Columns
-            .SelectMany(c => c.Accepts)
+            .SelectMany(c => c.Accepts.Prepend(c.Canonical))
             .Select(a => a.Trim().ToLowerInvariant())
             .ToHashSet();
 
