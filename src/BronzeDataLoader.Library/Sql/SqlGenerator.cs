@@ -39,7 +39,7 @@ public class SqlGenerator(
 
     /// <summary>Safe table name part: sanitized {Table}_{Submitter}_{hash}.</summary>
     private string SafeTablePart =>
-        $"{SanitizeIdentifier(Contract.Table)}_{SanitizeIdentifier(Submitter)}_{StemHash}";
+        $"{SanitizeIdentifier(Contract.Table).Trim('_')}_{SanitizeIdentifier(Submitter).Trim('_')}_{StemHash}";
 
     /// <summary>Full view/table name including schema and hash.</summary>
     public string FullTableName =>

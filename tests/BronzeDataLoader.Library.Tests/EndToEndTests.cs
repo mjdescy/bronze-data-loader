@@ -429,7 +429,7 @@ columns:
                 // The submitter "Capitalism, Inc." should be sanitized to "Capitalism__Inc_"
                 // The table "my-table_v2" should be sanitized to "my_table_v2"
                 Assert.Contains("my_table_v2", rawTables[0]);
-                Assert.Contains("Capitalism__Inc_", rawTables[0]);
+                Assert.Contains("Capitalism__Inc", rawTables[0]);
 
                 // Verify bronze view exists
                 var bronzeViews = GetTableNames(appConfig.Connection!, "bronze");
