@@ -4,7 +4,7 @@
 
 1. Load data files into the bronze_raw_data schema in a database.
 2. Create clean views for each table that matches the table contract in the bronze schema.
-3. Create views for each table that does not match the table contact in the bronze_quarantine schema.
+3. Create views for each table that does not match the table contract in the bronze_quarantine schema.
 
 ## Description
 
@@ -40,12 +40,15 @@ You can generate these files in the current working directory with the following
 bronze-data-loader init
 ```
 
-This command is equivalent to the following three commands:
+This command is equivalent to the following commands:
 
 ```bash
+mkdir data
+mkdir output
+mkdir contracts
 bronze-data-loader new config --output-folder .
-bronze-data-loader new contract --output-folder .
 bronze-data-loader new manifest --output-folder .
+bronze-data-loader new contract --output-folder contracts
 ```
 
 Edit the "config.yaml" file in your favorite editor. All file and folder paths are interpreted as relative to the config.yaml file. It will look like this:
@@ -60,10 +63,10 @@ database_name: "warehouse.duckdb" # relative to output_folder).
 
 The values in "manifest.csv" drive what data files are imported and what contract is applied to each data file. Edit the "manifest.csv" file in your favorite text editor or spreadsheet program. It has the following structure:
 
-| submitter  | source_folder | file_pattern  | contract               |
-| ---------- | ------------- | ------------- | ---------------------- |
-| Acme, Inc. | Acme/data-in  | customer*.csv | contract_customer.yaml |
-| Beta, LLC  | Beta/data-in  | customer*.tsv | contract_customer.yaml |
+| submitter  | source_folder | file_pattern  | contract            |
+| ---------- | ------------- | ------------- | ------------------- |
+| Acme, Inc. | Acme/data-in  | customer*.csv | customer_table.yaml |
+| Beta, LLC  | Beta/data-in  | customer*.tsv | customer_table.yaml |
 
 Source files can be defined as file patterns with wildcards (?, *). Tables for source files are named as follows: `[contract.table]_[submitter]_[file_stem_hash]`.
 

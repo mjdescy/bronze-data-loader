@@ -70,12 +70,19 @@ public class CliEndToEndTests
             var (exitCode, stdOut, _) = RunConsole("init", workingDir: dir);
 
             Assert.Equal(0, exitCode);
+            Assert.Contains("data/", stdOut);
+            Assert.Contains("output/", stdOut);
+            Assert.Contains("contracts/", stdOut);
             Assert.Contains("config.yaml", stdOut);
-            Assert.Contains("contract_customer.yaml", stdOut);
             Assert.Contains("manifest.csv", stdOut);
+
+            Assert.True(Directory.Exists(Path.Combine(dir, "data")));
+            Assert.True(Directory.Exists(Path.Combine(dir, "output")));
+            Assert.True(Directory.Exists(Path.Combine(dir, "contracts")));
+
             Assert.True(File.Exists(Path.Combine(dir, "config.yaml")));
-            Assert.True(File.Exists(Path.Combine(dir, "contract_customer.yaml")));
             Assert.True(File.Exists(Path.Combine(dir, "manifest.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "contracts", "customer_table.yaml")));
         }
         finally
         {
@@ -112,8 +119,8 @@ public class CliEndToEndTests
             var (exitCode, stdOut, _) = RunConsole($"new contract --output-folder \"{dir}\"");
 
             Assert.Equal(0, exitCode);
-            Assert.Contains("contract_customer.yaml", stdOut);
-            Assert.True(File.Exists(Path.Combine(dir, "contract_customer.yaml")));
+            Assert.Contains("customer_table.yaml", stdOut);
+            Assert.True(File.Exists(Path.Combine(dir, "customer_table.yaml")));
         }
         finally
         {
@@ -302,7 +309,7 @@ output_folder: '{outputDir}'
 database_name: ':memory:'
 """);
 
-        // contract_customer.yaml
+        // customer_table.yaml
         var contractContent = missingRequiredCol
             ? """
 table: customer
@@ -337,7 +344,7 @@ columns:
     required: false
 """;
 
-        File.WriteAllText(Path.Combine(rootDir, "contract_customer.yaml"), contractContent);
+        File.WriteAllText(Path.Combine(rootDir, "customer_table.yaml"), contractContent);
 
         // Source data
         var dataDir = Path.Combine(rootDir, "data");
@@ -352,7 +359,7 @@ columns:
         // manifest.csv
         File.WriteAllText(Path.Combine(rootDir, "manifest.csv"),
             "submitter,source_folder,file_pattern,contract\n" +
-            "Test,data,*.csv,contract_customer.yaml\n");
+            "Test,data,*.csv,customer_table.yaml\n");
 
         return configPath;
     }

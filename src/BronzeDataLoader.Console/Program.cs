@@ -20,20 +20,33 @@ static int RunInit(InitOptions opts)
     try
     {
         var outputFolder = Directory.GetCurrentDirectory();
+
+        var dataDir = Path.Combine(outputFolder, "data");
+        var outputDir = Path.Combine(outputFolder, "output");
+        var contractsDir = Path.Combine(outputFolder, "contracts");
+
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(outputDir);
+        Directory.CreateDirectory(contractsDir);
+
         GenerateConfig(outputFolder);
-        GenerateContract(outputFolder);
+        GenerateContract(contractsDir);
         GenerateManifest(outputFolder);
 
         Output.WriteLine(opts, $"Generated configuration files in {outputFolder}");
+        Output.WriteLine(opts, "  data/          (data files)");
+        Output.WriteLine(opts, "  output/        (generated output)");
+        Output.WriteLine(opts, "  contracts/     (contract definitions)");
         Output.WriteLine(opts, "  config.yaml");
-        Output.WriteLine(opts, "  contract_customer.yaml");
         Output.WriteLine(opts, "  manifest.csv");
+        Output.WriteLine(opts, "  contracts/customer_table.yaml");
 
         Output.WriteJson(opts, new
         {
             command = "init",
             output_folder = outputFolder,
-            files = new[] { "config.yaml", "contract_customer.yaml", "manifest.csv" },
+            directories = new[] { "data", "output", "contracts" },
+            files = new[] { "config.yaml", "manifest.csv", "contracts/customer_table.yaml" },
         });
         return 0;
     }
@@ -58,7 +71,7 @@ static int RunNew(NewOptions opts)
         var generatedFile = opts.SubCommand?.ToLowerInvariant() switch
         {
             "config" => "config.yaml",
-            "contract" => "contract_customer.yaml",
+            "contract" => "customer_table.yaml",
             "manifest" => "manifest.csv",
             _ => null,
         };
@@ -213,7 +226,7 @@ static void GenerateConfig(string outputFolder)
     var configContent = """
 manifest_path: "manifest.csv"
 data_folder: "data"
-contracts_folder: "contacts"
+contracts_folder: "contracts"
 output_folder: "output"
 database_name: "warehouse.duckdb"
 """;
@@ -222,7 +235,7 @@ database_name: "warehouse.duckdb"
 
 static void GenerateContract(string outputFolder)
 {
-    var contractPath = Path.Combine(outputFolder, "contract_customer.yaml");
+    var contractPath = Path.Combine(outputFolder, "customer_table.yaml");
     var contractContent = """
 # Destination table
 table: customer
