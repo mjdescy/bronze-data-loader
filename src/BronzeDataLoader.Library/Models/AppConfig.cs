@@ -37,12 +37,24 @@ public record AppConfig
     public DuckDBConnection? Connection { get; init; }
 
     /// <summary>
+    /// When <c>true</c>, the existing database file is preserved (<c>File.Delete</c> is skipped).
+    /// Defaults to <c>false</c> — the database file is deleted before a fresh load.
+    /// This value comes from the config YAML's <c>keep</c> field, with the CLI <c>--keep</c>
+    /// flag as an override.
+    /// </summary>
+    public bool Keep { get; init; }
+
+    /// <summary>
     /// Create an <see cref="AppConfig"/> from a YAML configuration file.
     /// </summary>
     /// <param name="yamlPath">Path to the YAML configuration file.</param>
+    /// <param name="keep">Optional override for the <c>keep</c> config setting.
+    /// When <c>true</c> the existing database file is preserved. When <c>false</c>
+    /// (or <c>null</c>, falling back to the config value), the database file is
+    /// deleted before opening a new connection.</param>
     /// <returns>A populated <see cref="AppConfig"/> with an open database connection.</returns>
     /// <exception cref="FileNotFoundException">The specified file does not exist.</exception>
-    public static AppConfig FromYaml(string yamlPath)
+    public static AppConfig FromYaml(string yamlPath, bool? keep = null)
     {
         if (!File.Exists(yamlPath))
             throw new FileNotFoundException($"Configuration file not found: {yamlPath}", yamlPath);
@@ -72,6 +84,13 @@ public record AppConfig
         var databasePath = string.Equals(databaseName, ":memory:", StringComparison.OrdinalIgnoreCase)
             ? databaseName
             : Path.Combine(outputFolder, databaseName);
+
+        // Resolve the effective keep value: CLI override > config > default (false)
+        var effectiveKeep = keep ?? rawConfig.Keep ?? false;
+        if (!effectiveKeep && databasePath != ":memory:" && File.Exists(databasePath))
+        {
+            File.Delete(databasePath);
+        }
 
         var conn = new DuckDBConnection($"DataSource={databasePath}");
         conn.Open();
@@ -128,6 +147,7 @@ public record AppConfig
             ContractsFolder = contractsFolder,
             OutputFolder = outputFolder,
             DatabaseName = databaseName,
+            Keep = effectiveKeep,
             RawSchema = rawConfig.RawSchema ?? "bronze_raw",
             Schema = rawConfig.Schema ?? "bronze",
             SchemaQuarantine = rawConfig.SchemaQuarantine ?? "bronze_quarantine",
@@ -159,6 +179,7 @@ public record AppConfig
         public string? ContractsFolder { get; init; }
         public string? OutputFolder { get; init; }
         public string? DatabaseName { get; init; }
+        public bool? Keep { get; init; }
         public string? RawSchema { get; init; }
         public string? Schema { get; init; }
         public string? SchemaQuarantine { get; init; }

@@ -118,6 +118,53 @@ The program will output a DuckDB database that contains the following:
 3. Views for all source files that do not conform to their contracts in the `bronze_quarantine` schema.
 4. Tracking tables and views in the `metadata` schema (see below).
 
+### Keeping or Replacing an Existing Database
+
+By default, `bronze-data-loader load` **deletes the existing DuckDB database file** before loading fresh data. This ensures a clean slate on every run.
+
+```bash
+bronze-data-loader load example/config.yaml          # delete existing DB, fresh start
+```
+
+#### `--keep`
+
+Preserve the existing database and load into it (raw tables are replaced, previously loaded tables remain):
+
+```bash
+bronze-data-loader load example/config.yaml --keep
+```
+
+You can set `keep: true` in `config.yaml` to make this the project-level default:
+
+```yaml
+manifest_path: "manifest.csv"
+data_folder: "data"
+contracts_folder: "contracts"
+output_folder: "output"
+database_name: "warehouse.duckdb"
+keep: true
+```
+
+#### `--drop`
+
+Force a fresh start by deleting the existing database, even if the config says `keep: true`:
+
+```bash
+bronze-data-loader load example/config.yaml --drop
+```
+
+This overrides both `--keep` and the config file's `keep` setting, ensuring a clean slate for that single run.
+
+| Config `keep` | CLI | Result |
+| :------------ | :-- | :----- |
+| *(absent / false)* | *(none)* | Delete existing database |
+| *(absent / false)* | `--keep` | Keep existing database |
+| `true` | *(none)* | Keep existing database |
+| `true` | `--drop` | Delete existing database |
+| any | `--drop` (with or without `--keep`) | Delete existing database |
+
+The database is never deleted when using `:memory:` as `database_name`.
+
 ## Metadata Schema
 
 The `metadata` schema tracks every import operation and provides visibility into load failures.

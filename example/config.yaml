@@ -3,3 +3,4 @@ data_folder: "data"
 contracts_folder: "contracts"
 output_folder: "output"
 database_name: "warehouse.duckdb"
+keep: false

@@ -119,7 +119,12 @@ static int RunLoad(LoadOptions opts)
     {
         var configPath = Path.GetFullPath(opts.ConfigPath!);
 
-        var appConfig = AppConfig.FromYaml(configPath);
+        // CLI --drop overrides --keep and config; --keep overrides config
+        // --drop: force delete the database (keep=false)
+        // --keep: preserve the database (keep=true)
+        // neither: use the config file's value (defaults to false)
+        var cliKeepOverride = opts.Drop ? (bool?)false : opts.Keep ? (bool?)true : null;
+        var appConfig = AppConfig.FromYaml(configPath, keep: cliKeepOverride);
 
         if (appConfig.Connection is null)
         {
@@ -229,6 +234,7 @@ data_folder: "data"
 contracts_folder: "contracts"
 output_folder: "output"
 database_name: "warehouse.duckdb"
+keep: false
 """;
     File.WriteAllText(configPath, configContent);
 }
@@ -333,6 +339,12 @@ public class LoadOptions : ICliOptions
 {
     [Value(0, MetaName = "config", Required = true, HelpText = "Path to the YAML configuration file.")]
     public string? ConfigPath { get; set; }
+
+    [Option('k', "keep", Required = false, HelpText = "Keep existing database; do not delete before loading. Overrides the 'keep' setting in the config file.")]
+    public bool Keep { get; set; }
+
+    [Option("drop", Required = false, HelpText = "Drop (delete) the existing database before loading, even if the config file has 'keep: true'. Overrides 'keep' and '--keep'.")]
+    public bool Drop { get; set; }
 
     [Option('g', "generate-sql", Required = false, HelpText = "Generate .sql files for each statement instead of executing against the database.")]
     public bool GenerateSql { get; set; }
