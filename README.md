@@ -117,7 +117,8 @@ The program will output a DuckDB database that contains the following:
 1. Tables for all matching source files in the `bronze_raw` schema.
 2. Views for all source files that conform to their contracts in the `bronze` schema.
 3. Views for all source files that do not conform to their contracts in the `bronze_quarantine` schema.
-4. Tracking tables and views in the `metadata` schema (see below).
+4. Combined views in the `bronze` schema that union together all per-file views belonging to the same contract (see [combined views](#combined-views) below).
+5. Tracking tables and views in the `metadata` schema (see below).
 
 ### Keeping or Replacing an Existing Database
 
@@ -165,6 +166,46 @@ This overrides both `--keep` and the config file's `keep` setting, ensuring a cl
 | any                | `--drop` (with or without `--keep`) | Delete existing database |
 
 The database is never deleted when using `:memory:` as `database_name`.
+
+## Combined Views
+
+After all source files are processed, the program automatically creates **combined views** in the `bronze` schema that union together all per-file bronze views belonging to the same contract. This lets you query all data for a contract — across all submitters and source files — from a single view.
+
+For example, if the manifest references the `customer_table.yaml` contract and two submitters each send data, the per-file views might be:
+
+```
+bronze.customer_Acme__Inc_abc12345
+bronze.customer_Beta_LLC_def67890
+```
+
+The program then creates a combined view:
+
+```sql
+CREATE OR REPLACE VIEW "bronze"."customer" AS
+SELECT * FROM "bronze"."customer_Acme__Inc_abc12345"
+UNION ALL BY NAME
+SELECT * FROM "bronze"."customer_Beta_LLC_def67890";
+```
+
+You can query it directly like any other view:
+
+```sql
+SELECT customer_id, signup_date, email
+FROM bronze.customer
+ORDER BY customer_id;
+```
+
+Combined views are always named `bronze.<contract_table>` — the contract table name without any suffix. Only contracts that have at least one successfully loaded bronze view will have a combined view created.
+
+### Interaction with `union_view_query_sql` macro
+
+The built-in `union_view_query_sql(source_schema, table_prefix)` macro generates a `UNION ALL BY NAME` SQL string across all views in a schema matching a prefix. The macro intentionally excludes the combined view itself (exact name match) to prevent recursive or duplicate unions. To union only the per-file sub-views, use:
+
+```sql
+SELECT union_view_query_sql('bronze', 'customer');
+```
+
+This will include `customer_Acme__Inc_abc12345` and `customer_Beta_LLC_def67890` but **not** the combined view `customer`.
 
 ## Metadata Schema
 

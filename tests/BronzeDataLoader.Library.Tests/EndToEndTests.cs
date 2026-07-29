@@ -77,6 +77,9 @@ columns:
                     sourceFile.GenerateAndExecuteSql(appConfig);
                 }
 
+                // Create combined views across all source files
+                SqlGenerator.CreateCombinedViews(appConfig.Connection!, sourceFiles);
+
                 // ===== Verify bronze_raw tables =====
                 var rawTableNames = GetTableNames(appConfig.Connection!, "bronze_raw");
                 Assert.Equal(3, rawTableNames.Length);
@@ -146,7 +149,8 @@ columns:
 
                 // ===== Verify bronze views =====
                 var bronzeViewNames = GetTableNames(appConfig.Connection!, "bronze");
-                Assert.Equal(3, bronzeViewNames.Length);
+                // 3 per-file sub-views + 1 combined view = 4
+                Assert.Equal(4, bronzeViewNames.Length);
 
                 var acmeView1 = SqlGenerator.QuoteQualified(
                     new SqlGenerator(acmeFiles[0].FilePath, acmeFiles[0].Submitter, acmeFiles[0].Contract, appConfig.Connection!).FullTableName);
@@ -188,6 +192,25 @@ columns:
                     using var reader = cmd.ExecuteReader();
                     Assert.True(reader.Read());
                     Assert.Equal("VIEW", reader.GetString(0));
+                }
+
+                // ===== Verify combined view =====
+                using (var combinedCmd = appConfig.Connection!.CreateCommand())
+                {
+                    // The combined view should union all per-file views
+                    combinedCmd.CommandText = "SELECT customer_id, signup_date::VARCHAR, email FROM \"bronze\".\"customer\" ORDER BY customer_id";
+                    using var reader = combinedCmd.ExecuteReader();
+
+                    // Should see data from all 3 source files
+                    Assert.True(reader.Read());
+                    var row1Id = reader.GetString(0);
+                    Assert.Contains(row1Id, new[] { "1", "101" });
+
+                    Assert.True(reader.Read());
+                    Assert.True(reader.Read());
+                    Assert.True(reader.Read());
+                    Assert.True(reader.Read());
+                    Assert.False(reader.Read());
                 }
             }
         }
@@ -791,6 +814,9 @@ columns:
                 foreach (var sf in sourceFiles)
                     sf.GenerateAndExecuteSql(appConfig);
 
+                // Create combined views across all source files
+                SqlGenerator.CreateCombinedViews(appConfig.Connection!, sourceFiles);
+
                 // Use the union_view_query_sql macro to generate a UNION ALL query
                 // across all bronze views matching the 'customer' prefix.
                 // Step 1: Call the macro to get the SQL string
@@ -822,6 +848,31 @@ columns:
                 Assert.Equal("Diana", reader.GetString(1));
 
                 Assert.False(reader.Read());
+
+                // ===== Verify combined view =====
+                using (var combinedCmd = appConfig.Connection!.CreateCommand())
+                {
+                    combinedCmd.CommandText = "SELECT id, name FROM \"bronze\".\"customer\" ORDER BY id";
+                    using var combinedReader = combinedCmd.ExecuteReader();
+
+                    Assert.True(combinedReader.Read());
+                    Assert.Equal(1, combinedReader.GetInt64(0));
+                    Assert.Equal("Alice", combinedReader.GetString(1));
+
+                    Assert.True(combinedReader.Read());
+                    Assert.Equal(2, combinedReader.GetInt64(0));
+                    Assert.Equal("Bob", combinedReader.GetString(1));
+
+                    Assert.True(combinedReader.Read());
+                    Assert.Equal(3, combinedReader.GetInt64(0));
+                    Assert.Equal("Charlie", combinedReader.GetString(1));
+
+                    Assert.True(combinedReader.Read());
+                    Assert.Equal(4, combinedReader.GetInt64(0));
+                    Assert.Equal("Diana", combinedReader.GetString(1));
+
+                    Assert.False(combinedReader.Read());
+                }
             }
         }
         finally

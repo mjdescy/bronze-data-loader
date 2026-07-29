@@ -144,6 +144,9 @@ static int RunLoad(LoadOptions opts)
             var processedCount = 0;
             var errorCount = 0;
 
+            // Track per-file bronze view names for combined view creation (generate mode only)
+            var combinedViewStatements = new List<(string Table, string Sql)>();
+
             foreach (var sourceFile in sourceFiles)
             {
                 try
@@ -165,6 +168,17 @@ static int RunLoad(LoadOptions opts)
                             allStatements.Add(stmt);
                         }
 
+                        // Track per-file bronze views for combined view creation
+                        var createView = statements.FirstOrDefault(s =>
+                            s.Operation == "create_view" && s.ObjectName != "v_failed_loads");
+                        if (createView is not null)
+                        {
+                            var table = sourceFile.Contract.Table;
+                            var schema = sourceFile.Contract.Schema.Valid;
+                            var qualifiedName = $"\"{SqlGenerator.SanitizeIdentifier(schema)}\".\"{createView.ObjectName}\"";
+                            combinedViewStatements.Add((table, qualifiedName));
+                        }
+
                         Output.WriteLine(opts, $"Collected SQL for {sourceFile.FilePath}.");
                     }
                     else
@@ -180,6 +194,29 @@ static int RunLoad(LoadOptions opts)
                     SysConsole.Error.WriteLine($"Error processing {sourceFile.FilePath}: {ex.Message}");
                     errorCount++;
                 }
+            }
+
+            // Create combined views for each contract
+            if (opts.GenerateSql)
+            {
+                // In generate mode, group tracked view names by contract and emit statements
+                var groups = combinedViewStatements
+                    .GroupBy(cv => cv.Table, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                foreach (var group in groups)
+                {
+                    var viewNames = group.Select(cv => cv.Sql).ToList();
+                    var combinedSql = SqlGenerator.BuildCombinedViewSql(group.Key, viewNames);
+                    allStatements.Add(new SqlStatement("create_view", SqlGenerator.SanitizeIdentifier(group.Key), combinedSql));
+                }
+            }
+            else
+            {
+                // In execute mode, use the library method to check view existence
+                var executed = SqlGenerator.CreateCombinedViews(appConfig.Connection!, sourceFiles);
+                if (executed.Count > 0)
+                    Output.WriteLine(opts, $"Created {executed.Count} combined view(s).");
             }
 
             var sqlFileCount = 0;

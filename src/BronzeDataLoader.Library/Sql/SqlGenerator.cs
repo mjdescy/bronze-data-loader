@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using DuckDB.NET.Data;
 using BronzeDataLoader.Library.Contract;
+using BronzeDataLoader.Library.Models;
 
 namespace BronzeDataLoader.Library.Sql;
 
@@ -159,8 +160,77 @@ public class SqlGenerator(
                 FROM information_schema.tables
                 WHERE table_schema = source_schema
                   AND table_name LIKE table_prefix || '%'
+                  AND table_name != table_prefix
             );
             """;
+    }
+
+    /// <summary>
+    /// Build SQL for a combined view that UNION ALL BY NAME across all per-file
+    /// bronze views for a given contract table. Uses <c>UNION ALL BY NAME</c> so
+    /// columns are matched by name across submitters, even if they appear in
+    /// different orders or have different column sets.
+    /// </summary>
+    /// <param name="contractTable">The contract table name (e.g. "customer").</param>
+    /// <param name="bronzeViewNames">Fully-qualified bronze view names to union.</param>
+    /// <returns>A <c>CREATE OR REPLACE VIEW</c> SQL statement.</returns>
+    public static string BuildCombinedViewSql(string contractTable, IEnumerable<string> bronzeViewNames)
+    {
+        var safeTable = SanitizeIdentifier(contractTable);
+        var selects = bronzeViewNames
+            .Select(v => $"  SELECT * FROM {v}")
+            .ToList();
+
+        return $"CREATE OR REPLACE VIEW \"bronze\".\"{safeTable}\" AS\n" +
+               string.Join("\n  UNION ALL BY NAME\n", selects) + ";";
+    }
+
+    /// <summary>
+    /// Create combined views for each distinct contract in the given source files.
+    /// Each combined view UNION ALL BY NAME across all per-file bronze views that
+    /// were successfully created (not quarantined).
+    /// </summary>
+    /// <param name="connection">Open DuckDB connection.</param>
+    /// <param name="sourceFiles">Source files grouped by contract.</param>
+    /// <returns>A list of SQL statements executed.</returns>
+    public static List<string> CreateCombinedViews(DuckDBConnection connection, IEnumerable<SourceFile> sourceFiles)
+    {
+        var executed = new List<string>();
+        var groups = sourceFiles.GroupBy(sf => sf.Contract.Table, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in groups)
+        {
+            var validSchema = group.First().Contract.Schema.Valid;
+            var existingViews = new List<string>();
+
+            foreach (var sf in group)
+            {
+                var gen = new SqlGenerator(sf.FilePath, sf.Submitter, sf.Contract, connection);
+                var fullTableName = gen.FullTableName;
+
+                // Parse schema.table from the unquoted full table name
+                var dotIndex = fullTableName.IndexOf('.');
+                var schema = dotIndex >= 0 ? fullTableName[..dotIndex] : fullTableName;
+                var viewName = dotIndex >= 0 ? fullTableName[(dotIndex + 1)..] : fullTableName;
+
+                using var checkCmd = connection.CreateCommand();
+                checkCmd.CommandText = $"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '{EscapeSingleQuotes(schema)}' AND table_name = '{EscapeSingleQuotes(viewName)}' AND table_type = 'VIEW'";
+                var count = checkCmd.ExecuteScalar();
+                if (count is long c && c > 0)
+                    existingViews.Add(QuoteQualified(fullTableName));
+            }
+
+            if (existingViews.Count > 0)
+            {
+                var sql = BuildCombinedViewSql(group.Key, existingViews);
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+                executed.Add(sql);
+            }
+        }
+
+        return executed;
     }
 
     /// <summary>

@@ -841,6 +841,60 @@ public class SqlGeneratorTests
         }
     }
 
+    // ===== Combined View Tests =====
+
+    public class BuildCombinedViewSqlTests
+    {
+        [Fact]
+        public void SingleView_ReturnsSimpleUnion()
+        {
+            var views = new[] { "\"bronze\".\"customer_Acme_hash\"" };
+            var sql = SqlGenerator.BuildCombinedViewSql("customer", views);
+
+            Assert.Contains("CREATE OR REPLACE VIEW \"bronze\".\"customer\"", sql);
+            Assert.Contains("SELECT * FROM \"bronze\".\"customer_Acme_hash\"", sql);
+            Assert.DoesNotContain("UNION ALL", sql); // single view, no union needed
+        }
+
+        [Fact]
+        public void MultipleViews_ReturnsUnionAllByName()
+        {
+            var views = new[]
+            {
+                "\"bronze\".\"customer_Acme_hash1\"",
+                "\"bronze\".\"customer_Acme_hash2\"",
+                "\"bronze\".\"customer_Beta_hash3\"",
+            };
+            var sql = SqlGenerator.BuildCombinedViewSql("customer", views);
+
+            Assert.Contains("CREATE OR REPLACE VIEW \"bronze\".\"customer\"", sql);
+            Assert.Contains("UNION ALL BY NAME", sql);
+            Assert.Contains("customer_Acme_hash1", sql);
+            Assert.Contains("customer_Acme_hash2", sql);
+            Assert.Contains("customer_Beta_hash3", sql);
+            Assert.EndsWith(";", sql.Trim());
+        }
+
+        [Fact]
+        public void TableNameWithUnderscore_IsSanitized()
+        {
+            var views = new[] { "\"bronze\".\"my_table_Acme_hash\"" };
+            var sql = SqlGenerator.BuildCombinedViewSql("my_table", views);
+
+            Assert.Contains("CREATE OR REPLACE VIEW \"bronze\".\"my_table\"", sql);
+            Assert.Contains("SELECT * FROM \"bronze\".\"my_table_Acme_hash\"", sql);
+        }
+
+        [Fact]
+        public void ViewNamesWithQuotes_ArePreserved()
+        {
+            var views = new[] { "\"bronze_raw\".\"special_view_hash\"" };
+            var sql = SqlGenerator.BuildCombinedViewSql("customer", views);
+
+            Assert.Contains("\"bronze_raw\".\"special_view_hash\"", sql);
+        }
+    }
+
     // ===== Quarantine SQL Tests =====
 
     public class BuildQuarantineSqlTests

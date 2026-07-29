@@ -261,9 +261,9 @@ public class CliEndToEndTests
 
             // First file should be a schema creation
             Assert.StartsWith("001_", Path.GetFileName(sqlFiles[0]));
-            // Last file should be a table_load insert
+            // Last file should be the combined view
             var lastFile = Path.GetFileName(sqlFiles[^1]);
-            Assert.Contains("insert_table_load", lastFile);
+            Assert.Contains("create_view_customer", lastFile);
         }
         finally
         {
