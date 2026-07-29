@@ -128,6 +128,22 @@ columns:
                     Assert.False(reader.Read());
                 }
 
+                // ===== Verify metadata columns in raw tables =====
+                using (var cmd = appConfig.Connection!.CreateCommand())
+                {
+                    cmd.CommandText = $"SELECT metadata_row_number, metadata_file_name, metadata_submitter FROM {acmeRaw1} ORDER BY metadata_row_number";
+                    using var reader = cmd.ExecuteReader();
+                    Assert.True(reader.Read());
+                    Assert.Equal(1, reader.GetInt64(0));
+                    Assert.EndsWith("customer_data_1.csv", reader.GetString(1));
+                    Assert.Equal("Acme", reader.GetString(2));
+                    Assert.True(reader.Read());
+                    Assert.Equal(2, reader.GetInt64(0));
+                    Assert.EndsWith("customer_data_1.csv", reader.GetString(1));
+                    Assert.Equal("Acme", reader.GetString(2));
+                    Assert.False(reader.Read());
+                }
+
                 // ===== Verify bronze views =====
                 var bronzeViewNames = GetTableNames(appConfig.Connection!, "bronze");
                 Assert.Equal(3, bronzeViewNames.Length);
@@ -513,10 +529,10 @@ columns:
                     // Collect statements
                     var statements = sourceFile.CollectSqlStatements(appConfig);
 
-                    // Deduplicate schemas
+                    // Deduplicate schemas and macros
                     foreach (var stmt in statements)
                     {
-                        if (stmt.Operation == "create_schema")
+                        if (stmt.Operation == "create_schema" || stmt.Operation == "create_macro")
                         {
                             if (!seenSchemas.Add(stmt.ObjectName))
                                 continue;
@@ -540,36 +556,41 @@ columns:
                 // Verify files
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 view
-                //              + 1 failed-loads view + 1 table_load = 8 files
-                Assert.Equal(8, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 view
+                //              + 1 failed-loads view + 1 table_load = 9 files
+                Assert.Equal(9, sqlFiles.Length);
 
                 // Verify ordering and naming
                 Assert.StartsWith("001_create_schema_bronze_raw", Path.GetFileName(sqlFiles[0]));
                 Assert.StartsWith("002_create_schema_bronze", Path.GetFileName(sqlFiles[1]));
                 Assert.StartsWith("003_create_schema_bronze_quarantine", Path.GetFileName(sqlFiles[2]));
                 Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
-                Assert.StartsWith("005_create_table_t_Test_", Path.GetFileName(sqlFiles[4]));
-                Assert.StartsWith("006_create_view_t_Test_", Path.GetFileName(sqlFiles[5]));
-                Assert.StartsWith("007_create_view_v_failed_loads", Path.GetFileName(sqlFiles[6]));
-                Assert.StartsWith("008_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[7]));
+                Assert.StartsWith("005_create_macro_metadata_filename", Path.GetFileName(sqlFiles[4]));
+                Assert.StartsWith("006_create_table_t_Test_", Path.GetFileName(sqlFiles[5]));
+                Assert.StartsWith("007_create_view_t_Test_", Path.GetFileName(sqlFiles[6]));
+                Assert.StartsWith("008_create_view_v_failed_loads", Path.GetFileName(sqlFiles[7]));
+                Assert.StartsWith("009_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[8]));
 
                 // Verify SQL content
-                var tableSql = File.ReadAllText(sqlFiles[4]);
+                var macroSql = File.ReadAllText(sqlFiles[4]);
+                Assert.Contains("CREATE OR REPLACE MACRO", macroSql);
+                Assert.Contains("metadata_filename", macroSql);
+
+                var tableSql = File.ReadAllText(sqlFiles[5]);
                 Assert.Contains("CREATE OR REPLACE TABLE", tableSql);
                 Assert.Contains("read_csv(", tableSql);
 
-                var viewSql = File.ReadAllText(sqlFiles[5]);
+                var viewSql = File.ReadAllText(sqlFiles[6]);
                 Assert.Contains("CREATE OR REPLACE VIEW", viewSql);
                 Assert.Contains("SELECT", viewSql);
                 Assert.Contains("FROM", viewSql);
 
-                var failedLoadsViewSql = File.ReadAllText(sqlFiles[6]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[7]);
                 Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
                 Assert.Contains("v_failed_loads", failedLoadsViewSql);
                 Assert.Contains("row_count IS NULL", failedLoadsViewSql);
 
-                var metadataLoadSql = File.ReadAllText(sqlFiles[7]);
+                var metadataLoadSql = File.ReadAllText(sqlFiles[8]);
                 Assert.Contains("INSERT INTO", metadataLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", metadataLoadSql);
             }
@@ -639,7 +660,7 @@ columns:
 
                     foreach (var stmt in statements)
                     {
-                        if (stmt.Operation == "create_schema")
+                        if (stmt.Operation == "create_schema" || stmt.Operation == "create_macro")
                         {
                             if (!seenSchemas.Add(stmt.ObjectName))
                                 continue;
@@ -659,32 +680,38 @@ columns:
 
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view
-                //              + 1 quarantine_log + 1 failed-loads view + 1 table_load = 9
-                Assert.Equal(9, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 quarantine_view
+                //              + 1 quarantine_log + 1 failed-loads view + 1 table_load = 10
+                Assert.Equal(10, sqlFiles.Length);
 
                 // Verify file order
                 Assert.StartsWith("001_create_schema_", Path.GetFileName(sqlFiles[0]));
-                Assert.StartsWith("005_create_table_", Path.GetFileName(sqlFiles[4]));
-                Assert.Contains("create_quarantine_view", sqlFiles[5]);
-                Assert.Contains("insert_quarantine_log", sqlFiles[6]);
-                Assert.Contains("create_view_v_failed_loads", sqlFiles[7]);
-                Assert.Contains("insert_table_load", sqlFiles[8]);
+                Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
+                Assert.StartsWith("005_create_macro_metadata_filename", Path.GetFileName(sqlFiles[4]));
+                Assert.StartsWith("006_create_table_", Path.GetFileName(sqlFiles[5]));
+                Assert.Contains("create_quarantine_view", sqlFiles[6]);
+                Assert.Contains("insert_quarantine_log", sqlFiles[7]);
+                Assert.Contains("create_view_v_failed_loads", sqlFiles[8]);
+                Assert.Contains("insert_table_load", sqlFiles[9]);
 
-                var quarantineViewSql = File.ReadAllText(sqlFiles[5]);
+                var macroSql = File.ReadAllText(sqlFiles[4]);
+                Assert.Contains("CREATE OR REPLACE MACRO", macroSql);
+                Assert.Contains("metadata_filename", macroSql);
+
+                var quarantineViewSql = File.ReadAllText(sqlFiles[6]);
                 Assert.Contains("CREATE OR REPLACE VIEW", quarantineViewSql);
                 Assert.Contains("bronze_quarantine", quarantineViewSql);
 
-                var logSql = File.ReadAllText(sqlFiles[6]);
+                var logSql = File.ReadAllText(sqlFiles[7]);
                 Assert.Contains("INSERT INTO", logSql);
                 Assert.Contains("\"metadata\".\"quarantine\"", logSql);
 
-                var failedLoadsViewSql = File.ReadAllText(sqlFiles[7]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[8]);
                 Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
                 Assert.Contains("v_failed_loads", failedLoadsViewSql);
                 Assert.Contains("row_count IS NULL", failedLoadsViewSql);
 
-                var tableLoadSql = File.ReadAllText(sqlFiles[8]);
+                var tableLoadSql = File.ReadAllText(sqlFiles[9]);
                 Assert.Contains("INSERT INTO", tableLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", tableLoadSql);
             }

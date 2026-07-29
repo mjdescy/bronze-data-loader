@@ -324,6 +324,9 @@ public class SqlGeneratorTests
                 Assert.Contains("CREATE OR REPLACE TABLE", sql);
                 Assert.Contains("\"bronze_raw\".\"customer_Acme_", sql);
                 Assert.Contains("read_csv(", sql);
+                Assert.Contains("metadata_row_number", sql);
+                Assert.Contains("metadata_file_name", sql);
+                Assert.Contains("metadata_submitter", sql);
                 Assert.EndsWith(";", sql.Trim());
             }
             finally
@@ -341,6 +344,7 @@ public class SqlGeneratorTests
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
 
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -348,6 +352,9 @@ public class SqlGeneratorTests
                 Assert.Contains("customer_id", cols);
                 Assert.Contains("signup_date", cols);
                 Assert.Contains("email", cols);
+                Assert.Contains("metadata_row_number", cols);
+                Assert.Contains("metadata_file_name", cols);
+                Assert.Contains("metadata_submitter", cols);
             }
             finally
             {
@@ -368,6 +375,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -392,6 +400,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -425,6 +434,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -447,6 +457,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -470,6 +481,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -505,6 +517,7 @@ public class SqlGeneratorTests
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Acme", contractWithAlias, conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -527,6 +540,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -555,6 +569,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -579,6 +594,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -587,12 +603,15 @@ public class SqlGeneratorTests
 
                 // Query the view (cast DATE to VARCHAR for locale-independent comparison)
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
+                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email, metadata_row_number, metadata_file_name, metadata_submitter FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("42", reader.GetString(0));
                 Assert.Equal("2024-01-15", reader.GetString(1));
                 Assert.Equal("a@b.com", reader.GetString(2));
+                Assert.Equal(1, reader.GetInt64(3)); // metadata_row_number
+                Assert.Equal(Path.GetFileName(csvPath), reader.GetString(4)); // metadata_file_name
+                Assert.Equal("Acme", reader.GetString(5)); // metadata_submitter
             }
             finally
             {
@@ -608,6 +627,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -664,6 +684,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -703,6 +724,7 @@ public class SqlGeneratorTests
             try
             {
                 var gen = new SqlGenerator(csvPath, "Acme", MakeContract(), conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
@@ -714,9 +736,9 @@ public class SqlGeneratorTests
                 ExecuteSql(conn, quarantineSql);
                 ExecuteSql(conn, metadataSql);
 
-                // Verify data is preserved in quarantine view
+                // Verify data is preserved in quarantine view (metadata columns come first)
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"SELECT * FROM {SqlGenerator.QuoteQualified(gen.QuarantineTableName)}";
+                cmd.CommandText = $"SELECT customer_id FROM {SqlGenerator.QuoteQualified(gen.QuarantineTableName)}";
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("99", reader.GetString(0));
@@ -742,13 +764,15 @@ public class SqlGeneratorTests
                 var gen = new SqlGenerator(csvPath, "Test", MakeContract("customer"), conn);
 
                 // Load raw data so DESCRIBE works
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
                 var statements = gen.CollectStatements();
 
-                // 3 contract schemas + 1 metadata schema + 1 table + 1 view + 1 failed-loads view + 1 table_load = 8
-                Assert.Equal(8, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 view
+                // + 1 failed-loads view + 1 table_load = 9
+                Assert.Equal(9, statements.Count);
 
                 Assert.Equal("create_schema", statements[0].Operation);
                 Assert.Equal("bronze_raw", statements[0].ObjectName);
@@ -763,21 +787,25 @@ public class SqlGeneratorTests
                 Assert.Equal("create_schema", statements[3].Operation);
                 Assert.Equal("metadata", statements[3].ObjectName);
 
-                Assert.Equal("create_table", statements[4].Operation);
-                Assert.Contains("CREATE OR REPLACE TABLE", statements[4].Sql);
+                Assert.Equal("create_macro", statements[4].Operation);
+                Assert.Equal("metadata_filename", statements[4].ObjectName);
+                Assert.Contains("CREATE OR REPLACE MACRO", statements[4].Sql);
 
-                Assert.Equal("create_view", statements[5].Operation);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
+                Assert.Equal("create_table", statements[5].Operation);
+                Assert.Contains("CREATE OR REPLACE TABLE", statements[5].Sql);
 
                 Assert.Equal("create_view", statements[6].Operation);
-                Assert.Equal("v_failed_loads", statements[6].ObjectName);
                 Assert.Contains("CREATE OR REPLACE VIEW", statements[6].Sql);
-                Assert.Contains("row_count IS NULL", statements[6].Sql);
 
-                Assert.Equal("insert_table_load", statements[7].Operation);
-                Assert.Contains("INSERT INTO", statements[7].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[7].Sql);
-                Assert.Contains("NULL", statements[7].Sql);
+                Assert.Equal("create_view", statements[7].Operation);
+                Assert.Equal("v_failed_loads", statements[7].ObjectName);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[7].Sql);
+                Assert.Contains("row_count IS NULL", statements[7].Sql);
+
+                Assert.Equal("insert_table_load", statements[8].Operation);
+                Assert.Contains("INSERT INTO", statements[8].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[8].Sql);
+                Assert.Contains("NULL", statements[8].Sql);
             }
             finally
             {
@@ -805,36 +833,268 @@ public class SqlGeneratorTests
 
                 var gen = new SqlGenerator(csvPath, "Test", contract, conn);
 
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 
                 var statements = gen.CollectStatements();
 
-                // 3 contract schemas + 1 metadata schema + 1 table + 1 quarantine_view
-                // + 1 quarantine_log + 1 failed-loads view + 1 table_load = 9
-                Assert.Equal(9, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 quarantine_view
+                // + 1 quarantine_log + 1 failed-loads view + 1 table_load = 10
+                Assert.Equal(10, statements.Count);
 
-                Assert.Equal("create_quarantine_view", statements[5].Operation);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[5].Sql);
+                Assert.Equal("create_macro", statements[4].Operation);
 
-                Assert.Equal("insert_quarantine_log", statements[6].Operation);
-                Assert.Contains("INSERT INTO", statements[6].Sql);
-                Assert.Contains("\"metadata\".\"quarantine\"", statements[6].Sql);
+                Assert.Equal("create_quarantine_view", statements[6].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[6].Sql);
 
-                Assert.Equal("create_view", statements[7].Operation);
-                Assert.Equal("v_failed_loads", statements[7].ObjectName);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[7].Sql);
-                Assert.Contains("row_count IS NULL", statements[7].Sql);
+                Assert.Equal("insert_quarantine_log", statements[7].Operation);
+                Assert.Contains("INSERT INTO", statements[7].Sql);
+                Assert.Contains("\"metadata\".\"quarantine\"", statements[7].Sql);
 
-                Assert.Equal("insert_table_load", statements[8].Operation);
-                Assert.Contains("INSERT INTO", statements[8].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[8].Sql);
-                Assert.Contains("NULL", statements[8].Sql);
+                Assert.Equal("create_view", statements[8].Operation);
+                Assert.Equal("v_failed_loads", statements[8].ObjectName);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[8].Sql);
+                Assert.Contains("row_count IS NULL", statements[8].Sql);
+
+                Assert.Equal("insert_table_load", statements[9].Operation);
+                Assert.Contains("INSERT INTO", statements[9].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[9].Sql);
+                Assert.Contains("NULL", statements[9].Sql);
             }
             finally
             {
                 if (File.Exists(csvPath)) File.Delete(csvPath);
             }
+        }
+    }
+
+    // ===== Metadata Column Tests =====
+
+    public class MetadataColumnTests
+    {
+        [Fact]
+        public void MetadataRowNumber_MatchesSourceFileOrder()
+        {
+            using var conn = CreateInMemoryConnection();
+            // CSV content encodes the expected position
+            var csvPath = CreateTempCsv("expected_pos,name\n1,Alice\n2,Bob\n3,Charlie\n4,Diana\n");
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "position_test",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "expected_pos", Accepts = ["expected_pos"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "name", Accepts = ["name"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_row_number, CAST(expected_pos AS BIGINT) AS expected_pos FROM {SqlGenerator.QuoteQualified(gen.RawTableName)} ORDER BY metadata_row_number";
+                using var reader = cmd.ExecuteReader();
+                var rowNum = 1;
+                while (reader.Read())
+                {
+                    Assert.Equal(rowNum, reader.GetInt64(0)); // metadata_row_number
+                    Assert.Equal(rowNum, reader.GetInt64(1)); // expected_pos
+                    rowNum++;
+                }
+                Assert.Equal(5, rowNum); // rows 1..4, so rowNum ends at 5
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MetadataRowNumber_StartsAtOne()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("x\ny\n");
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "single_row",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "x", Accepts = ["x"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_row_number FROM {SqlGenerator.QuoteQualified(gen.RawTableName)}";
+                var result = cmd.ExecuteScalar();
+                Assert.Equal(1L, result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MetadataFileName_ContainsOnlyFileName()
+        {
+            using var conn = CreateInMemoryConnection();
+            // Create a CSV in a deeply nested temp directory
+            var dir = Path.Combine(Path.GetTempPath(), "a", "b", "c", "d");
+            Directory.CreateDirectory(dir);
+            var csvPath = Path.Combine(dir, "test_export.csv");
+            File.WriteAllText(csvPath, "id\n1\n");
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "file_test",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_file_name FROM {SqlGenerator.QuoteQualified(gen.RawTableName)}";
+                var result = cmd.ExecuteScalar() as string;
+                Assert.Equal("test_export.csv", result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void MetadataFileName_SpecialCharacters()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("id\n1\n");
+            // Rename to a file with spaces and parentheses
+            var dir = Path.GetDirectoryName(csvPath)!;
+            var renamedPath = Path.Combine(dir, "my file (v2).csv");
+            if (File.Exists(renamedPath)) File.Delete(renamedPath);
+            File.Move(csvPath, renamedPath);
+            csvPath = renamedPath;
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "special_file",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_file_name FROM {SqlGenerator.QuoteQualified(gen.RawTableName)}";
+                var result = cmd.ExecuteScalar() as string;
+                Assert.Equal("my file (v2).csv", result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MetadataSubmitter_StoredCorrectly()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("id\n1\n");
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "submitter_test",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Acme, Inc. & Co.", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_submitter FROM {SqlGenerator.QuoteQualified(gen.RawTableName)}";
+                var result = cmd.ExecuteScalar() as string;
+                Assert.Equal("Acme, Inc. & Co.", result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MetadataSubmitter_WithSingleQuote()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("id\n1\n");
+            try
+            {
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                var contract = new Contract.Contract
+                {
+                    Table = "quote_test",
+                    Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "O'Brien Data", contract, conn);
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT metadata_submitter FROM {SqlGenerator.QuoteQualified(gen.RawTableName)}";
+                var result = cmd.ExecuteScalar() as string;
+                Assert.Equal("O'Brien Data", result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void MetadataFilenameMacro_CreatedAndWorks()
+        {
+            using var conn = CreateInMemoryConnection();
+            ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT metadata_filename('/some/path/file.csv')";
+            var result = cmd.ExecuteScalar() as string;
+            Assert.Equal("file.csv", result);
         }
     }
 

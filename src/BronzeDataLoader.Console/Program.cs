@@ -154,10 +154,10 @@ static int RunLoad(LoadOptions opts)
                         sourceFile.GenerateRawLoad(appConfig);
                         var statements = sourceFile.CollectSqlStatements(appConfig);
 
-                        // Deduplicate schema statements across source files
+                        // Deduplicate schema and macro statements across source files
                         foreach (var stmt in statements)
                         {
-                            if (stmt.Operation == "create_schema")
+                            if (stmt.Operation == "create_schema" || stmt.Operation == "create_macro")
                             {
                                 if (!seenSchemas.Add(stmt.ObjectName))
                                     continue;

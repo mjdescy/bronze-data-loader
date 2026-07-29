@@ -38,6 +38,7 @@ public record SourceFile
                 table_name VARCHAR,
                 file_name VARCHAR,
                 file_path VARCHAR,
+                submitter VARCHAR,
                 imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 row_count BIGINT
             );
@@ -49,6 +50,10 @@ public record SourceFile
                 quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """);
+
+        // Create the metadata_filename macro for extracting file names from paths
+        ExecuteNonQuery(connection, SqlGenerator.BuildCreateMacroSql());
+
         ExecuteNonQuery(connection, sqlGenerator.BuildCreateFailedLoadsViewSql());
 
         // Insert row with NULL row_count BEFORE load (negative tracking).
@@ -95,6 +100,7 @@ public record SourceFile
         var sqlGenerator = new SqlGenerator(FilePath, Submitter, Contract, connection);
 
         ExecuteNonQuery(connection, sqlGenerator.BuildCreateSchemaIfNotExists());
+        ExecuteNonQuery(connection, SqlGenerator.BuildCreateMacroSql());
         ExecuteNonQuery(connection, sqlGenerator.BuildRawLoadSql());
     }
 

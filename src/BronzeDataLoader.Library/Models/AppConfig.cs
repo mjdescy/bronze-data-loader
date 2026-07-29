@@ -118,6 +118,7 @@ public record AppConfig
                 table_name VARCHAR,
                 file_name VARCHAR,
                 file_path VARCHAR,
+                submitter VARCHAR,
                 imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 row_count BIGINT
             );

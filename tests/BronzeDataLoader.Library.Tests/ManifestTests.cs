@@ -517,6 +517,7 @@ columns: []
 
                 // First load the raw data
                 var gen = new SqlGenerator(csvPath, "Acme", contract, conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
                 ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
                 ExecuteSql(conn, gen.BuildRawLoadSql());
 

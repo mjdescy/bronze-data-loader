@@ -134,6 +134,16 @@ public class SqlGenerator(
     }
 
     /// <summary>
+    /// Build the DuckDB macro for extracting the file name from a full file path.
+    /// The macro is created once during metadata setup and reused across all file loads.
+    /// Uses regex to handle both forward-slash (Unix) and backslash (Windows) path separators.
+    /// </summary>
+    public static string BuildCreateMacroSql()
+    {
+        return "CREATE OR REPLACE MACRO metadata_filename(path) AS regexp_extract(path, '[^/\\\\]+$', 0);";
+    }
+
+    /// <summary>
     /// Build a read function call for the source file based on its extension.
     /// </summary>
     /// <returns>A SQL read function call string.</returns>
@@ -155,15 +165,27 @@ public class SqlGenerator(
 
     /// <summary>
     /// Build SQL to load data from the source file into a raw table.
+    /// Prepends metadata columns (row_number, file_name, submitter) before the source data columns.
     /// </summary>
     public string BuildRawLoadSql()
     {
         var tableName = QuoteQualified(RawTableName);
-        return $"CREATE OR REPLACE TABLE {tableName} AS SELECT * FROM {BuildReadFunctionCall()};";
+        var safePath = EscapeSingleQuotes(FilePath);
+        var safeSubmitter = EscapeSingleQuotes(Submitter);
+        var readFunc = BuildReadFunctionCall();
+
+        return $"CREATE OR REPLACE TABLE {tableName} AS\n" +
+               $"SELECT\n" +
+               $"  row_number() OVER () AS metadata_row_number,\n" +
+               $"  metadata_filename('{safePath}') AS metadata_file_name,\n" +
+               $"  '{safeSubmitter}' AS metadata_submitter,\n" +
+               $"  *\n" +
+               $"FROM {readFunc};";
     }
 
     /// <summary>
     /// Build a SELECT statement that maps raw columns to canonical contract columns.
+    /// Also automatically includes any <c>metadata_</c>-prefixed columns from the raw table.
     /// </summary>
     /// <returns>A tuple of the SELECT SQL and any warnings.</returns>
     /// <exception cref="InvalidOperationException">Required columns are missing.</exception>
@@ -171,25 +193,29 @@ public class SqlGenerator(
     {
         var rawQuoted = QuoteQualified(RawTableName);
 
-        // Get actual column names from the raw table
-        var actualCols = new List<string>();
+        // Get actual column names AND types from the raw table (needed for metadata column casting)
+        var actualCols = new List<(string Name, string Type)>();
         using (var cmd = Connection.CreateCommand())
         {
-            cmd.CommandText = $"SELECT column_name FROM (DESCRIBE SELECT * FROM {rawQuoted})";
+            cmd.CommandText = $"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rawQuoted})";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                actualCols.Add(reader.GetString(0));
+                actualCols.Add((reader.GetString(0), reader.GetString(1)));
             }
         }
 
-        var actualColsCaseFold = actualCols
+        var actualColNames = actualCols.Select(c => c.Name).ToList();
+        var actualColTypes = actualCols.ToDictionary(c => c.Name, c => c.Type, StringComparer.OrdinalIgnoreCase);
+
+        var actualColsCaseFold = actualColNames
             .Select(c => c.Trim().ToLowerInvariant())
             .ToHashSet();
 
         var selectCols = new List<string>();
         var errors = new List<string>();
         var warnings = new List<string>();
+        var addedCanonicalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var col in Contract.Columns)
         {
@@ -234,22 +260,25 @@ public class SqlGenerator(
                 {
                     selectCols.Add($"NULL::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
                 }
+                addedCanonicalNames.Add(safeCanonical);
                 continue;
             }
 
             // Quote and sanitize the found column name for safe SQL
             var safeFound = EscapeQuotes(found.Trim());
             selectCols.Add($"\"{safeFound}\"::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
+            addedCanonicalNames.Add(safeCanonical);
         }
 
-        // Find extra columns not in the contract
+        // Find extra columns not in the contract (excluding metadata_ columns — they are intentional)
         var acceptedColumnNames = Contract.Columns
             .SelectMany(c => c.Accepts.Prepend(c.Canonical))
             .Select(a => a.Trim().ToLowerInvariant())
             .ToHashSet();
 
-        var extraColumnNames = actualCols
+        var extraColumnNames = actualColNames
             .Where(name => !acceptedColumnNames.Contains(name.Trim().ToLowerInvariant()))
+            .Where(name => !name.Trim().StartsWith("metadata_", StringComparison.OrdinalIgnoreCase))
             .Select(name => name.Trim())
             .OrderBy(n => n)
             .ToArray();
@@ -262,6 +291,19 @@ public class SqlGenerator(
         if (errors.Count > 0)
         {
             throw new InvalidOperationException(string.Join("; ", errors));
+        }
+
+        // Auto-include metadata_ columns from the raw table (if not already covered by a contract column)
+        foreach (var (name, type) in actualCols)
+        {
+            if (name.Trim().StartsWith("metadata_", StringComparison.OrdinalIgnoreCase))
+            {
+                var safeName = SanitizeIdentifier(name.Trim());
+                if (!addedCanonicalNames.Contains(safeName))
+                {
+                    selectCols.Add($"\"{EscapeQuotes(name.Trim())}\"::{type.ToUpperInvariant()} AS {safeName}");
+                }
+            }
         }
 
         var sql = $"SELECT\n  {string.Join(",\n  ", selectCols)}";
@@ -305,21 +347,22 @@ public class SqlGenerator(
     }
 
     /// <summary>
-    /// Build a helper that extracts the raw schema parts, file name, and escaped file path
-    /// for use in metadata SQL statements.
+    /// Build a helper that extracts the raw schema parts, file name, escaped file path,
+    /// and escaped submitter for use in metadata SQL statements.
     /// </summary>
     /// <remarks>
     /// TODO: Migrate metadata INSERT/UPDATE to <c>DuckDBParameter</c>-based commands
     /// to eliminate SQL injection risk entirely instead of relying on string escaping.
     /// </remarks>
-    private (string RawSchema, string RawTableName, string FileName, string EscapedFilePath) GetMetadataParts()
+    private (string RawSchema, string RawTableName, string FileName, string EscapedFilePath, string EscapedSubmitter) GetMetadataParts()
     {
         var rawSchemaParts = RawTableName.Split('.');
         var rawSchema = rawSchemaParts[0];
         var rawTableName = rawSchemaParts.Length > 1 ? rawSchemaParts[1] : rawSchemaParts[0];
         var fileName = EscapeSingleQuotes(Path.GetFileName(FilePath));
         var filePath = EscapeSingleQuotes(FilePath);
-        return (rawSchema, rawTableName, fileName, filePath);
+        var submitter = EscapeSingleQuotes(Submitter);
+        return (rawSchema, rawTableName, fileName, filePath, submitter);
     }
 
     /// <summary>
@@ -329,27 +372,28 @@ public class SqlGenerator(
     /// </summary>
     public string BuildInsertTableLoadMetadataSql()
     {
-        var (rawSchema, rawTableName, fileName, filePath) = GetMetadataParts();
+        var (rawSchema, rawTableName, fileName, filePath, submitter) = GetMetadataParts();
 
-        return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, row_count)\n" +
-               $"VALUES ('{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', NULL);";
+        return $"INSERT INTO \"metadata\".\"table_load\" (table_schema, table_name, file_name, file_path, submitter, row_count)\n" +
+               $"VALUES ('{rawSchema}', '{rawTableName}', '{fileName}', '{filePath}', '{submitter}', NULL);";
     }
 
     /// <summary>
     /// Build an UPDATE statement for <c>metadata.table_load</c> to set the row_count
-    /// on a successful load. Matches the row by file_path and NULL row_count
+    /// on a successful load. Matches the row by file_path, submitter, and NULL row_count
     /// so that only the pre-load insertion (from <see cref="BuildInsertTableLoadMetadataSql"/>)
     /// is updated.
     /// </summary>
     /// <param name="rowCount">The number of rows in the imported table.</param>
     public string BuildUpdateTableLoadMetadataSql(long rowCount)
     {
-        var (rawSchema, rawTableName, fileName, filePath) = GetMetadataParts();
+        var (rawSchema, rawTableName, fileName, filePath, submitter) = GetMetadataParts();
 
         return $"UPDATE \"metadata\".\"table_load\" SET row_count = {rowCount}\n" +
                $"WHERE table_schema = '{rawSchema}'\n" +
                $"  AND table_name = '{rawTableName}'\n" +
                $"  AND file_path = '{filePath}'\n" +
+               $"  AND submitter = '{submitter}'\n" +
                $"  AND row_count IS NULL;";
     }
 
@@ -388,6 +432,9 @@ public class SqlGenerator(
         // Metadata schema
         statements.Add(new SqlStatement("create_schema", "metadata",
             "CREATE SCHEMA IF NOT EXISTS \"metadata\";"));
+
+        // Metadata filename macro
+        statements.Add(new SqlStatement("create_macro", "metadata_filename", BuildCreateMacroSql()));
 
         // Raw table import
         statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));
