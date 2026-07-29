@@ -144,6 +144,26 @@ public class SqlGenerator(
     }
 
     /// <summary>
+    /// Build the DuckDB macro for dynamically generating UNION ALL BY NAME queries
+    /// across all tables in a schema matching a given prefix. Useful for unioning
+    /// multiple source files that share the same contract (e.g. multiple submitter files).
+    /// </summary>
+    public static string BuildCreateUnionViewQueryMacroSql()
+    {
+        return """
+            CREATE OR REPLACE MACRO union_view_query_sql(source_schema, table_prefix) AS (
+                SELECT string_agg(
+                    'SELECT * FROM "' || source_schema || '"."' || table_name || '"',
+                    chr(10) || 'UNION ALL BY NAME' || chr(10)
+                )
+                FROM information_schema.tables
+                WHERE table_schema = source_schema
+                  AND table_name LIKE table_prefix || '%'
+            );
+            """;
+    }
+
+    /// <summary>
     /// Build a read function call for the source file based on its extension.
     /// </summary>
     /// <returns>A SQL read function call string.</returns>
@@ -433,8 +453,9 @@ public class SqlGenerator(
         statements.Add(new SqlStatement("create_schema", "metadata",
             "CREATE SCHEMA IF NOT EXISTS \"metadata\";"));
 
-        // Metadata filename macro
+        // Utility macros
         statements.Add(new SqlStatement("create_macro", "metadata_filename", BuildCreateMacroSql()));
+        statements.Add(new SqlStatement("create_macro", "union_view_query_sql", BuildCreateUnionViewQueryMacroSql()));
 
         // Raw table import
         statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));

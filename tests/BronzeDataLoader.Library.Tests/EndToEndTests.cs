@@ -556,9 +556,9 @@ columns:
                 // Verify files
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 view
-                //              + 1 failed-loads view + 1 table_load = 9 files
-                Assert.Equal(9, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 2 macros + 1 table + 1 view
+                //              + 1 failed-loads view + 1 table_load = 10 files
+                Assert.Equal(10, sqlFiles.Length);
 
                 // Verify ordering and naming
                 Assert.StartsWith("001_create_schema_bronze_raw", Path.GetFileName(sqlFiles[0]));
@@ -566,31 +566,36 @@ columns:
                 Assert.StartsWith("003_create_schema_bronze_quarantine", Path.GetFileName(sqlFiles[2]));
                 Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
                 Assert.StartsWith("005_create_macro_metadata_filename", Path.GetFileName(sqlFiles[4]));
-                Assert.StartsWith("006_create_table_t_Test_", Path.GetFileName(sqlFiles[5]));
-                Assert.StartsWith("007_create_view_t_Test_", Path.GetFileName(sqlFiles[6]));
-                Assert.StartsWith("008_create_view_v_failed_loads", Path.GetFileName(sqlFiles[7]));
-                Assert.StartsWith("009_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[8]));
+                Assert.StartsWith("006_create_macro_union_view_query_sql", Path.GetFileName(sqlFiles[5]));
+                Assert.StartsWith("007_create_table_t_Test_", Path.GetFileName(sqlFiles[6]));
+                Assert.StartsWith("008_create_view_t_Test_", Path.GetFileName(sqlFiles[7]));
+                Assert.StartsWith("009_create_view_v_failed_loads", Path.GetFileName(sqlFiles[8]));
+                Assert.StartsWith("010_insert_table_load_t_Test_", Path.GetFileName(sqlFiles[9]));
 
                 // Verify SQL content
                 var macroSql = File.ReadAllText(sqlFiles[4]);
                 Assert.Contains("CREATE OR REPLACE MACRO", macroSql);
                 Assert.Contains("metadata_filename", macroSql);
 
-                var tableSql = File.ReadAllText(sqlFiles[5]);
+                var unionViewMacroSql = File.ReadAllText(sqlFiles[5]);
+                Assert.Contains("CREATE OR REPLACE MACRO", unionViewMacroSql);
+                Assert.Contains("union_view_query_sql", unionViewMacroSql);
+
+                var tableSql = File.ReadAllText(sqlFiles[6]);
                 Assert.Contains("CREATE OR REPLACE TABLE", tableSql);
                 Assert.Contains("read_csv(", tableSql);
 
-                var viewSql = File.ReadAllText(sqlFiles[6]);
+                var viewSql = File.ReadAllText(sqlFiles[7]);
                 Assert.Contains("CREATE OR REPLACE VIEW", viewSql);
                 Assert.Contains("SELECT", viewSql);
                 Assert.Contains("FROM", viewSql);
 
-                var failedLoadsViewSql = File.ReadAllText(sqlFiles[7]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[8]);
                 Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
                 Assert.Contains("v_failed_loads", failedLoadsViewSql);
                 Assert.Contains("row_count IS NULL", failedLoadsViewSql);
 
-                var metadataLoadSql = File.ReadAllText(sqlFiles[8]);
+                var metadataLoadSql = File.ReadAllText(sqlFiles[9]);
                 Assert.Contains("INSERT INTO", metadataLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", metadataLoadSql);
             }
@@ -680,40 +685,143 @@ columns:
 
                 var sqlFiles = Directory.GetFiles(outputDir, "*.sql").OrderBy(f => f).ToArray();
 
-                // Should have: 3 contract schemas + 1 metadata schema + 1 macro + 1 table + 1 quarantine_view
-                //              + 1 quarantine_log + 1 failed-loads view + 1 table_load = 10
-                Assert.Equal(10, sqlFiles.Length);
+                // Should have: 3 contract schemas + 1 metadata schema + 2 macros + 1 table + 1 quarantine_view
+                //              + 1 quarantine_log + 1 failed-loads view + 1 table_load = 11
+                Assert.Equal(11, sqlFiles.Length);
 
                 // Verify file order
                 Assert.StartsWith("001_create_schema_", Path.GetFileName(sqlFiles[0]));
                 Assert.StartsWith("004_create_schema_metadata", Path.GetFileName(sqlFiles[3]));
                 Assert.StartsWith("005_create_macro_metadata_filename", Path.GetFileName(sqlFiles[4]));
-                Assert.StartsWith("006_create_table_", Path.GetFileName(sqlFiles[5]));
-                Assert.Contains("create_quarantine_view", sqlFiles[6]);
-                Assert.Contains("insert_quarantine_log", sqlFiles[7]);
-                Assert.Contains("create_view_v_failed_loads", sqlFiles[8]);
-                Assert.Contains("insert_table_load", sqlFiles[9]);
+                Assert.StartsWith("006_create_macro_union_view_query_sql", Path.GetFileName(sqlFiles[5]));
+                Assert.StartsWith("007_create_table_", Path.GetFileName(sqlFiles[6]));
+                Assert.Contains("create_quarantine_view", sqlFiles[7]);
+                Assert.Contains("insert_quarantine_log", sqlFiles[8]);
+                Assert.Contains("create_view_v_failed_loads", sqlFiles[9]);
+                Assert.Contains("insert_table_load", sqlFiles[10]);
 
                 var macroSql = File.ReadAllText(sqlFiles[4]);
                 Assert.Contains("CREATE OR REPLACE MACRO", macroSql);
                 Assert.Contains("metadata_filename", macroSql);
 
-                var quarantineViewSql = File.ReadAllText(sqlFiles[6]);
+                var unionViewMacroSql = File.ReadAllText(sqlFiles[5]);
+                Assert.Contains("CREATE OR REPLACE MACRO", unionViewMacroSql);
+                Assert.Contains("union_view_query_sql", unionViewMacroSql);
+
+                var quarantineViewSql = File.ReadAllText(sqlFiles[7]);
                 Assert.Contains("CREATE OR REPLACE VIEW", quarantineViewSql);
                 Assert.Contains("bronze_quarantine", quarantineViewSql);
 
-                var logSql = File.ReadAllText(sqlFiles[7]);
+                var logSql = File.ReadAllText(sqlFiles[8]);
                 Assert.Contains("INSERT INTO", logSql);
                 Assert.Contains("\"metadata\".\"quarantine\"", logSql);
 
-                var failedLoadsViewSql = File.ReadAllText(sqlFiles[8]);
+                var failedLoadsViewSql = File.ReadAllText(sqlFiles[9]);
                 Assert.Contains("CREATE OR REPLACE VIEW", failedLoadsViewSql);
                 Assert.Contains("v_failed_loads", failedLoadsViewSql);
                 Assert.Contains("row_count IS NULL", failedLoadsViewSql);
 
-                var tableLoadSql = File.ReadAllText(sqlFiles[9]);
+                var tableLoadSql = File.ReadAllText(sqlFiles[10]);
                 Assert.Contains("INSERT INTO", tableLoadSql);
                 Assert.Contains("\"metadata\".\"table_load\"", tableLoadSql);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
+    // ===== Union View Query Macro =====
+
+    [Fact]
+    public void UnionViewQueryMacro_UnionsAllTablesByPrefix()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: customer
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    type: BIGINT
+    required: true
+  - canonical: name
+    accepts: [name]
+    type: VARCHAR
+    required: false
+""");
+
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            // Two source files for the same contract
+            File.WriteAllText(Path.Combine(dataDir, "alice.csv"), "id,name\n1,Alice\n2,Bob\n");
+            File.WriteAllText(Path.Combine(dataDir, "charlie.csv"), "id,name\n3,Charlie\n4,Diana\n");
+
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath,
+                "submitter,source_folder,file_pattern,contract\n" +
+                "Test,data,alice.csv,c.yaml\n" +
+                "Test,data,charlie.csv,c.yaml\n");
+
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath,
+                $"manifest_path: '{manifestPath}'\n" +
+                $"data_folder: '{testDir}'\n" +
+                $"contracts_folder: '{testDir}'\n" +
+                $"output_folder: '{testDir}'\n" +
+                $"database_name: ':memory:'\n");
+
+            var appConfig = AppConfig.FromYaml(configPath);
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+                Assert.Equal(2, sourceFiles.Count);
+
+                foreach (var sf in sourceFiles)
+                    sf.GenerateAndExecuteSql(appConfig);
+
+                // Use the union_view_query_sql macro to generate a UNION ALL query
+                // across all bronze views matching the 'customer' prefix.
+                // Step 1: Call the macro to get the SQL string
+                using var cmd = appConfig.Connection!.CreateCommand();
+                cmd.CommandText = "SELECT union_view_query_sql('bronze', 'customer')";
+                var generatedSql = cmd.ExecuteScalar() as string;
+                Assert.NotNull(generatedSql);
+                Assert.Contains("UNION ALL BY NAME", generatedSql);
+                Assert.Contains("bronze", generatedSql);
+
+                // Step 2: Execute the generated UNION ALL SQL
+                cmd.CommandText = generatedSql + " ORDER BY id";
+                using var reader = cmd.ExecuteReader();
+
+                Assert.True(reader.Read());
+                Assert.Equal(1, reader.GetInt64(0));
+                Assert.Equal("Alice", reader.GetString(1));
+
+                Assert.True(reader.Read());
+                Assert.Equal(2, reader.GetInt64(0));
+                Assert.Equal("Bob", reader.GetString(1));
+
+                Assert.True(reader.Read());
+                Assert.Equal(3, reader.GetInt64(0));
+                Assert.Equal("Charlie", reader.GetString(1));
+
+                Assert.True(reader.Read());
+                Assert.Equal(4, reader.GetInt64(0));
+                Assert.Equal("Diana", reader.GetString(1));
+
+                Assert.False(reader.Read());
             }
         }
         finally

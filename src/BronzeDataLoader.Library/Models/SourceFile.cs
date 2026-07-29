@@ -51,8 +51,9 @@ public record SourceFile
             );
             """);
 
-        // Create the metadata_filename macro for extracting file names from paths
+        // Create utility macros
         ExecuteNonQuery(connection, SqlGenerator.BuildCreateMacroSql());
+        ExecuteNonQuery(connection, SqlGenerator.BuildCreateUnionViewQueryMacroSql());
 
         ExecuteNonQuery(connection, sqlGenerator.BuildCreateFailedLoadsViewSql());
 
@@ -101,6 +102,7 @@ public record SourceFile
 
         ExecuteNonQuery(connection, sqlGenerator.BuildCreateSchemaIfNotExists());
         ExecuteNonQuery(connection, SqlGenerator.BuildCreateMacroSql());
+        ExecuteNonQuery(connection, SqlGenerator.BuildCreateUnionViewQueryMacroSql());
         ExecuteNonQuery(connection, sqlGenerator.BuildRawLoadSql());
     }
 
