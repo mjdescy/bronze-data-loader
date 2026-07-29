@@ -1,0 +1,4 @@
+customer_id,signup_date,email,count,amount
+B1004,2026-06-01,badamt1@acme.example,2,100.00
+B1005,2026-06-02,badamt2@acme.example,1,VOID
+B1006,2026-06-03,badamt3@acme.example,4,250.00

@@ -16,3 +16,11 @@ columns:
     accepts: [email, E-mail, email_address]
     type: VARCHAR
     required: false
+  - canonical: count
+    accepts: [count, order_count, num_orders]
+    type: BIGINT
+    required: false
+  - canonical: amount
+    accepts: [amount, total, total_amount]
+    type: DECIMAL
+    required: false

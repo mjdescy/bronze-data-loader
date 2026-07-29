@@ -346,6 +346,67 @@ public class SqlGenerator(
     }
 
     /// <summary>
+    /// Build SQL to detect non-empty values in typed columns that cannot be cast
+    /// to their target contract type. Blank (empty) values are always allowed
+    /// regardless of type. Runs after raw load so the raw table exists.
+    /// </summary>
+    /// <returns>A validation SQL string, or null if no typed columns need validation.</returns>
+    public string? BuildDataValidationSql()
+    {
+        var rawQuoted = QuoteQualified(RawTableName);
+
+        // Get actual column names from the raw table (it exists because this runs after raw load)
+        var actualColsCaseFold = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var cmd = Connection.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT column_name FROM (DESCRIBE SELECT * FROM {rawQuoted})";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                actualColsCaseFold.Add(reader.GetString(0).Trim().ToLowerInvariant());
+        }
+
+        var checks = new List<string>();
+
+        foreach (var col in Contract.Columns)
+        {
+            if (col.Type.Equals("VARCHAR", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!AllowedColumnTypes.Contains(col.Type))
+                continue;
+
+            // Find the actual column name in the raw data matching this contract column
+            string? found = null;
+            if (actualColsCaseFold.Contains(col.Canonical.Trim().ToLowerInvariant()))
+                found = col.Canonical;
+            else
+            {
+                foreach (var acceptedName in col.Accepts)
+                {
+                    if (actualColsCaseFold.Contains(acceptedName.Trim().ToLowerInvariant()))
+                    {
+                        found = acceptedName;
+                        break;
+                    }
+                }
+            }
+
+            if (found is null)
+                continue; // column missing — BuildSelect will catch it if required
+
+            var safeName = SanitizeIdentifier(found.Trim());
+            checks.Add(
+                $"(\"{safeName}\" IS NOT NULL AND \"{safeName}\" != '' " +
+                $"AND try_cast(\"{safeName}\" AS {col.Type.ToUpperInvariant()}) IS NULL)");
+        }
+
+        if (checks.Count == 0)
+            return null;
+
+        return $"SELECT 1 FROM {rawQuoted}\nWHERE {string.Join("\n   OR ", checks)}\nLIMIT 1;";
+    }
+
+    /// <summary>
     /// Build SQL statements for quarantining a data file that doesn't meet the contract.
     /// </summary>
     /// <param name="errorMessage">The validation error message.</param>
@@ -459,6 +520,12 @@ public class SqlGenerator(
 
         // Raw table import
         statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));
+
+        // Data validation — check for non-empty values that cannot be cast to
+        // their target contract type. Blank (empty) values are always allowed.
+        var validateSql = BuildDataValidationSql();
+        if (validateSql is not null)
+            statements.Add(new SqlStatement("validate_data", SafeTablePart, validateSql));
 
         // View or quarantine — these need DESCRIBE data so raw load must have happened
         try

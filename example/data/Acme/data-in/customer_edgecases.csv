@@ -1,6 +1,6 @@
-customer_id,signup_date,email
-A1039,2026-12-31,nye@acme.example
-A1040,2026-01-01,
-A1041,2025-06-15,old@acme.example
-A1042,2026-02-29,leap@acme.example
-A1043,2026-07-04,july@acme.example
+customer_id,signup_date,email,count,amount
+A1039,2026-12-31,nye@acme.example,0,0.00
+A1040,2026-01-01,,1,25.00
+A1041,2025-06-15,old@acme.example,3,450.00
+A1042,2026-02-28,leap@acme.example,2,125.00
+A1043,2026-07-04,july@acme.example,1,60.00

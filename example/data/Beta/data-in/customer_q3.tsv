@@ -1,10 +1,10 @@
-email	signup_date	cust_id
-lars@beta.example	2026-07-06	B2013
-maya@beta.example	2026-07-15	B2014
-nick@beta.example	2026-07-24	B2015
-olivia@beta.example	2026-08-03	B2016
-pete@beta.example	2026-08-14	B2017
-quinn@beta.example	2026-08-25	B2018
-rose@beta.example	2026-09-05	B2019
-sam@beta.example	2026-09-16	B2020
-tina@beta.example	2026-09-27	B2021
+email	signup_date	cust_id	count	amount
+lars@beta.example	2026-07-06	B2013	1	95.00
+maya@beta.example	2026-07-15	B2014	2	185.00
+nick@beta.example	2026-07-24	B2015	3	275.00
+olivia@beta.example	2026-08-03	B2016	4	365.00
+pete@beta.example	2026-08-14	B2017	5	455.00
+quinn@beta.example	2026-08-25	B2018	6	545.00
+rose@beta.example	2026-09-05	B2019	7	635.00
+sam@beta.example	2026-09-16	B2020	8	725.00
+tina@beta.example	2026-09-27	B2021	9	815.00

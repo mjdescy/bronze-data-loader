@@ -70,6 +70,23 @@ public record SourceFile
 
         try
         {
+            // Validate data: check for non-empty values that cannot be cast to their
+            // target contract type. Blank (empty) values are always allowed.
+            var validateSql = sqlGenerator.BuildDataValidationSql();
+            if (validateSql is not null)
+            {
+                using var validateCmd = connection.CreateCommand();
+                validateCmd.CommandText = validateSql;
+                var badDataFound = validateCmd.ExecuteScalar();
+                if (badDataFound is not null)
+                {
+                    throw new InvalidOperationException(
+                        "Data validation failed: one or more non-empty values cannot be cast " +
+                        "to their target contract type. Inspect the raw table " +
+                        $"{sqlGenerator.RawTableName} for details.");
+                }
+            }
+
             var (viewSql, warnings) = sqlGenerator.BuildBronzeViewSql();
             ExecuteNonQuery(connection, viewSql);
 

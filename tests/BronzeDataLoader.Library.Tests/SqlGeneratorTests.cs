@@ -648,6 +648,199 @@ public class SqlGeneratorTests
         }
     }
 
+    // ===== Data Validation Tests =====
+
+    public class BuildDataValidationSqlTests
+    {
+        [Fact]
+        public void AllColumnsVarchar_ReturnsNull()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("name\nAlice\n");
+            try
+            {
+                var contract = new Contract.Contract
+                {
+                    Table = "t",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "name", Accepts = ["name"], Type = "VARCHAR", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                Assert.Null(gen.BuildDataValidationSql());
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void TypedColumnWithValidData_ReturnsSelectWithNoResults()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("signup_date\n2026-02-28\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var validateSql = gen.BuildDataValidationSql();
+                Assert.NotNull(validateSql);
+                Assert.Contains("try_cast", validateSql);
+                Assert.Contains("DATE", validateSql);
+
+                // Execute the validation — should return no rows
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = validateSql;
+                var result = cmd.ExecuteScalar();
+                Assert.Null(result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void InvalidDate_ReturnsRow()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("signup_date\n2026-02-29\n");
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var validateSql = gen.BuildDataValidationSql();
+                Assert.NotNull(validateSql);
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = validateSql;
+                var result = cmd.ExecuteScalar();
+                Assert.NotNull(result);
+                Assert.NotEqual(DBNull.Value, result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BlankValue_AllowedForAnyType()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("signup_date\n\n");  // blank date
+            try
+            {
+                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var validateSql = gen.BuildDataValidationSql();
+                Assert.NotNull(validateSql);
+
+                // Blank values should pass validation
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = validateSql;
+                var result = cmd.ExecuteScalar();
+                Assert.Null(result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void BlankInteger_Allowed()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("count\n\n");  // blank integer
+            try
+            {
+                var contract = new Contract.Contract
+                {
+                    Table = "t",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "count", Accepts = ["count"], Type = "BIGINT", Required = false },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var validateSql = gen.BuildDataValidationSql();
+                Assert.NotNull(validateSql);
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = validateSql;
+                var result = cmd.ExecuteScalar();
+                Assert.Null(result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
+        public void InvalidInteger_ReturnsRow()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("count\nnot-a-number\n");
+            try
+            {
+                var contract = new Contract.Contract
+                {
+                    Table = "t",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "count", Accepts = ["count"], Type = "BIGINT", Required = true },
+                    ],
+                };
+                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
+
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var validateSql = gen.BuildDataValidationSql();
+                Assert.NotNull(validateSql);
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = validateSql;
+                var result = cmd.ExecuteScalar();
+                Assert.NotNull(result);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+    }
+
     // ===== Quarantine SQL Tests =====
 
     public class BuildQuarantineSqlTests
@@ -770,9 +963,9 @@ public class SqlGeneratorTests
 
                 var statements = gen.CollectStatements();
 
-                // 3 contract schemas + 1 metadata schema + 2 macros + 1 table + 1 view
-                // + 1 failed-loads view + 1 table_load = 10
-                Assert.Equal(10, statements.Count);
+                // 3 contract schemas + 1 metadata schema + 2 macros + 1 table
+                // + 1 validate_data + 1 view + 1 failed-loads view + 1 table_load = 11
+                Assert.Equal(11, statements.Count);
 
                 Assert.Equal("create_schema", statements[0].Operation);
                 Assert.Equal("bronze_raw", statements[0].ObjectName);
@@ -798,18 +991,22 @@ public class SqlGeneratorTests
                 Assert.Equal("create_table", statements[6].Operation);
                 Assert.Contains("CREATE OR REPLACE TABLE", statements[6].Sql);
 
-                Assert.Equal("create_view", statements[7].Operation);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[7].Sql);
+                Assert.Equal("validate_data", statements[7].Operation);
+                Assert.Contains("try_cast", statements[7].Sql);
+                Assert.Contains("DATE", statements[7].Sql);
 
                 Assert.Equal("create_view", statements[8].Operation);
-                Assert.Equal("v_failed_loads", statements[8].ObjectName);
                 Assert.Contains("CREATE OR REPLACE VIEW", statements[8].Sql);
-                Assert.Contains("row_count IS NULL", statements[8].Sql);
 
-                Assert.Equal("insert_table_load", statements[9].Operation);
-                Assert.Contains("INSERT INTO", statements[9].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[9].Sql);
-                Assert.Contains("NULL", statements[9].Sql);
+                Assert.Equal("create_view", statements[9].Operation);
+                Assert.Equal("v_failed_loads", statements[9].ObjectName);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[9].Sql);
+                Assert.Contains("row_count IS NULL", statements[9].Sql);
+
+                Assert.Equal("insert_table_load", statements[10].Operation);
+                Assert.Contains("INSERT INTO", statements[10].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[10].Sql);
+                Assert.Contains("NULL", statements[10].Sql);
             }
             finally
             {

@@ -1,4 +1,4 @@
-email	signup_date	cust_id
-ana@beta.example	2026-02-03	B2001
-ben@beta.example	2026-02-11	B2002
-	2026-02-20	B2003
+email	signup_date	cust_id	count	amount
+ana@beta.example	2026-02-03	B2001	1	75.00
+ben@beta.example	2026-02-11	B2002	2	150.00
+	2026-02-20	B2003	3	225.00

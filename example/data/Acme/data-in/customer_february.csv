@@ -1,6 +1,6 @@
-customer_id,signup_date,email
-A1004,2026-02-02,carol@acme.example
-A1005,2026-02-08,dave@acme.example
-A1006,2026-02-14,eve@acme.example
-A1007,2026-02-21,frank@acme.example
-A1008,2026-02-28,grace@acme.example
+customer_id,signup_date,email,count,amount
+A1004,2026-02-02,carol@acme.example,2,89.99
+A1005,2026-02-08,dave@acme.example,4,320.00
+A1006,2026-02-14,eve@acme.example,1,45.00
+A1007,2026-02-21,frank@acme.example,3,175.25
+A1008,2026-02-28,grace@acme.example,6,500.00

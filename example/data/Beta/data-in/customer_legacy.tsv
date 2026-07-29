@@ -1,6 +1,6 @@
-email_address	sign_up_date	cust_id
-uma@beta.example	2026-01-12	B2022
-val@beta.example	2026-02-18	B2023
-walt@beta.example	2026-03-22	B2024
-xena@beta.example	2026-04-09	B2025
-yuki@beta.example	2026-05-30	B2026
+email_address	sign_up_date	cust_id	count	amount
+uma@beta.example	2026-01-12	B2022	1	85.00
+val@beta.example	2026-02-18	B2023	2	165.00
+walt@beta.example	2026-03-22	B2024	3	245.00
+xena@beta.example	2026-04-09	B2025	4	325.00
+yuki@beta.example	2026-05-30	B2026	5	405.00
