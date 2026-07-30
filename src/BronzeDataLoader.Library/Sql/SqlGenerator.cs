@@ -55,34 +55,6 @@ public class SqlGenerator(
         $"{SanitizeIdentifier(Contract.Schema.Invalid)}.{SafeTablePart}";
 
     /// <summary>
-    /// Allow-list of DuckDB column types that contracts may specify.
-    /// Prevents SQL injection via unvalidated type names embedded in CAST expressions.
-    /// </summary>
-    private static readonly HashSet<string> AllowedColumnTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // String types
-        "VARCHAR", "TEXT", "STRING",
-        // Integer types
-        "BIGINT", "INTEGER", "INT", "SMALLINT", "TINYINT", "HUGEINT",
-        "UBIGINT", "UINTEGER", "USMALLINT", "UTINYINT",
-        // Numeric types
-        "DOUBLE", "FLOAT", "REAL", "DECIMAL", "NUMERIC",
-        // Boolean
-        "BOOLEAN", "BOOL",
-        // Date/time types
-        "DATE", "TIME", "TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP_MS", "TIMESTAMP_S",
-        "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE",
-        // Interval
-        "INTERVAL",
-        // UUID
-        "UUID",
-        // Binary
-        "BLOB", "BYTEA", "BINARY", "VARBINARY",
-        // JSON
-        "JSON",
-    };
-
-    /// <summary>
     /// Replace any character that is not alphanumeric or underscore with underscore.
     /// DuckDB object names (schemas, tables, views, columns) must not contain
     /// special characters even when quoted, to avoid ambiguous or broken SQL.
@@ -284,20 +256,17 @@ public class SqlGenerator(
     {
         var rawQuoted = QuoteQualified(RawTableName);
 
-        // Get actual column names AND types from the raw table (needed for metadata column casting)
-        var actualCols = new List<(string Name, string Type)>();
+        // Get actual column names from the raw table
+        var actualColNames = new List<string>();
         using (var cmd = Connection.CreateCommand())
         {
-            cmd.CommandText = $"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rawQuoted})";
+            cmd.CommandText = $"SELECT column_name FROM (DESCRIBE SELECT * FROM {rawQuoted})";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                actualCols.Add((reader.GetString(0), reader.GetString(1)));
+                actualColNames.Add(reader.GetString(0));
             }
         }
-
-        var actualColNames = actualCols.Select(c => c.Name).ToList();
-        var actualColTypes = actualCols.ToDictionary(c => c.Name, c => c.Type, StringComparer.OrdinalIgnoreCase);
 
         var actualColsCaseFold = actualColNames
             .Select(c => c.Trim().ToLowerInvariant())
@@ -310,15 +279,6 @@ public class SqlGenerator(
 
         foreach (var col in Contract.Columns)
         {
-            // Validate the column type against the allow-list before embedding it in SQL
-            if (!AllowedColumnTypes.Contains(col.Type))
-            {
-                errors.Add(
-                    $"Unsupported column type '{col.Type}' for column '{col.Canonical}'. " +
-                    $"Allowed types: {string.Join(", ", AllowedColumnTypes.Order())}");
-                continue;
-            }
-
             string? found = null;
             // Always treat canonical as if it is the first member of the accepts list,
             // so it is always recognized as an allowed name even if not listed in accepts.
@@ -349,7 +309,7 @@ public class SqlGenerator(
                 }
                 else
                 {
-                    selectCols.Add($"NULL::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
+                    selectCols.Add($"NULL AS {safeCanonical}");
                 }
                 addedCanonicalNames.Add(safeCanonical);
                 continue;
@@ -357,7 +317,7 @@ public class SqlGenerator(
 
             // Quote and sanitize the found column name for safe SQL
             var safeFound = EscapeQuotes(found.Trim());
-            selectCols.Add($"\"{safeFound}\"::{col.Type.ToUpperInvariant()} AS {safeCanonical}");
+            selectCols.Add($"\"{safeFound}\" AS {safeCanonical}");
             addedCanonicalNames.Add(safeCanonical);
         }
 
@@ -385,14 +345,14 @@ public class SqlGenerator(
         }
 
         // Auto-include metadata_ columns from the raw table (if not already covered by a contract column)
-        foreach (var (name, type) in actualCols)
+        foreach (var name in actualColNames)
         {
             if (name.Trim().StartsWith("metadata_", StringComparison.OrdinalIgnoreCase))
             {
                 var safeName = SanitizeIdentifier(name.Trim());
                 if (!addedCanonicalNames.Contains(safeName))
                 {
-                    selectCols.Add($"\"{EscapeQuotes(name.Trim())}\"::{type.ToUpperInvariant()} AS {safeName}");
+                    selectCols.Add($"\"{EscapeQuotes(name.Trim())}\" AS {safeName}");
                 }
             }
         }
@@ -414,67 +374,6 @@ public class SqlGenerator(
         var sql = $"CREATE OR REPLACE VIEW {viewQuoted} AS\n{selectSql}\nFROM {rawQuoted};";
 
         return (sql, warnings);
-    }
-
-    /// <summary>
-    /// Build SQL to detect non-empty values in typed columns that cannot be cast
-    /// to their target contract type. Blank (empty) values are always allowed
-    /// regardless of type. Runs after raw load so the raw table exists.
-    /// </summary>
-    /// <returns>A validation SQL string, or null if no typed columns need validation.</returns>
-    public string? BuildDataValidationSql()
-    {
-        var rawQuoted = QuoteQualified(RawTableName);
-
-        // Get actual column names from the raw table (it exists because this runs after raw load)
-        var actualColsCaseFold = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var cmd = Connection.CreateCommand())
-        {
-            cmd.CommandText = $"SELECT column_name FROM (DESCRIBE SELECT * FROM {rawQuoted})";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-                actualColsCaseFold.Add(reader.GetString(0).Trim().ToLowerInvariant());
-        }
-
-        var checks = new List<string>();
-
-        foreach (var col in Contract.Columns)
-        {
-            if (col.Type.Equals("VARCHAR", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (!AllowedColumnTypes.Contains(col.Type))
-                continue;
-
-            // Find the actual column name in the raw data matching this contract column
-            string? found = null;
-            if (actualColsCaseFold.Contains(col.Canonical.Trim().ToLowerInvariant()))
-                found = col.Canonical;
-            else
-            {
-                foreach (var acceptedName in col.Accepts)
-                {
-                    if (actualColsCaseFold.Contains(acceptedName.Trim().ToLowerInvariant()))
-                    {
-                        found = acceptedName;
-                        break;
-                    }
-                }
-            }
-
-            if (found is null)
-                continue; // column missing — BuildSelect will catch it if required
-
-            var safeName = SanitizeIdentifier(found.Trim());
-            checks.Add(
-                $"(\"{safeName}\" IS NOT NULL AND \"{safeName}\" != '' " +
-                $"AND try_cast(\"{safeName}\" AS {col.Type.ToUpperInvariant()}) IS NULL)");
-        }
-
-        if (checks.Count == 0)
-            return null;
-
-        return $"SELECT 1 FROM {rawQuoted}\nWHERE {string.Join("\n   OR ", checks)}\nLIMIT 1;";
     }
 
     /// <summary>
@@ -591,12 +490,6 @@ public class SqlGenerator(
 
         // Raw table import
         statements.Add(new SqlStatement("create_table", SafeTablePart, BuildRawLoadSql()));
-
-        // Data validation — check for non-empty values that cannot be cast to
-        // their target contract type. Blank (empty) values are always allowed.
-        var validateSql = BuildDataValidationSql();
-        if (validateSql is not null)
-            statements.Add(new SqlStatement("validate_data", SafeTablePart, validateSql));
 
         // View or quarantine — these need DESCRIBE data so raw load must have happened
         try

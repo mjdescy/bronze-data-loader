@@ -23,9 +23,9 @@ public class SqlGeneratorTests
             },
             Columns =
             [
-                new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Type = "VARCHAR", Required = true },
-                new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
-                new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = false },
+                new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Required = true },
+                new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                new ContractColumn { Canonical = "email", Accepts = ["email"], Required = false },
             ],
         };
     }
@@ -413,10 +413,10 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema(),
                     Columns =
                     [
-                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
-                        new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "missing_col", Accepts = ["missing_col"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Required = true },
+                        new ContractColumn { Canonical = "missing_col", Accepts = ["missing_col"], Required = true },
                     ],
                 };
                 var gen2 = new SqlGenerator(csvPath, "Acme", contractWithMoreRequired, conn);
@@ -442,7 +442,7 @@ public class SqlGeneratorTests
 
                 var (sql, warnings) = gen.BuildSelect();
 
-                Assert.Contains("NULL::VARCHAR AS email", sql);
+                Assert.Contains("NULL AS email", sql);
                 Assert.Empty(warnings);
             }
             finally
@@ -513,9 +513,9 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema(),
                     Columns =
                     [
-                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
-                        new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = false },
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id", "cust_id"], Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Required = false },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Acme", contractWithAlias, conn);
@@ -603,9 +603,9 @@ public class SqlGeneratorTests
                 var (sql, warnings) = gen.BuildBronzeViewSql();
                 ExecuteSql(conn, sql);
 
-                // Query the view (cast DATE to VARCHAR for locale-independent comparison)
+                // Query the view
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email, metadata_row_number, metadata_file_name, metadata_submitter, metadata_loaded_at FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
+                cmd.CommandText = $"SELECT customer_id, signup_date, email, metadata_row_number, metadata_file_name, metadata_submitter, metadata_loaded_at FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("42", reader.GetString(0));
@@ -643,199 +643,6 @@ public class SqlGeneratorTests
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("VIEW", reader.GetString(0));
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-    }
-
-    // ===== Data Validation Tests =====
-
-    public class BuildDataValidationSqlTests
-    {
-        [Fact]
-        public void AllColumnsVarchar_ReturnsNull()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("name\nAlice\n");
-            try
-            {
-                var contract = new Contract.Contract
-                {
-                    Table = "t",
-                    Schema = new ContractSchema(),
-                    Columns =
-                    [
-                        new ContractColumn { Canonical = "name", Accepts = ["name"], Type = "VARCHAR", Required = true },
-                    ],
-                };
-                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                Assert.Null(gen.BuildDataValidationSql());
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-
-        [Fact]
-        public void TypedColumnWithValidData_ReturnsSelectWithNoResults()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("signup_date\n2026-02-28\n");
-            try
-            {
-                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                var validateSql = gen.BuildDataValidationSql();
-                Assert.NotNull(validateSql);
-                Assert.Contains("try_cast", validateSql);
-                Assert.Contains("DATE", validateSql);
-
-                // Execute the validation — should return no rows
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = validateSql;
-                var result = cmd.ExecuteScalar();
-                Assert.Null(result);
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-
-        [Fact]
-        public void InvalidDate_ReturnsRow()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("signup_date\n2026-02-29\n");
-            try
-            {
-                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                var validateSql = gen.BuildDataValidationSql();
-                Assert.NotNull(validateSql);
-
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = validateSql;
-                var result = cmd.ExecuteScalar();
-                Assert.NotNull(result);
-                Assert.NotEqual(DBNull.Value, result);
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-
-        [Fact]
-        public void BlankValue_AllowedForAnyType()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("signup_date\n\n");  // blank date
-            try
-            {
-                var gen = new SqlGenerator(csvPath, "Test", MakeContract(), conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                var validateSql = gen.BuildDataValidationSql();
-                Assert.NotNull(validateSql);
-
-                // Blank values should pass validation
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = validateSql;
-                var result = cmd.ExecuteScalar();
-                Assert.Null(result);
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-
-        [Fact]
-        public void BlankInteger_Allowed()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("count\n\n");  // blank integer
-            try
-            {
-                var contract = new Contract.Contract
-                {
-                    Table = "t",
-                    Schema = new ContractSchema(),
-                    Columns =
-                    [
-                        new ContractColumn { Canonical = "count", Accepts = ["count"], Type = "BIGINT", Required = false },
-                    ],
-                };
-                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                var validateSql = gen.BuildDataValidationSql();
-                Assert.NotNull(validateSql);
-
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = validateSql;
-                var result = cmd.ExecuteScalar();
-                Assert.Null(result);
-            }
-            finally
-            {
-                if (File.Exists(csvPath)) File.Delete(csvPath);
-            }
-        }
-
-        [Fact]
-        public void InvalidInteger_ReturnsRow()
-        {
-            using var conn = CreateInMemoryConnection();
-            var csvPath = CreateTempCsv("count\nnot-a-number\n");
-            try
-            {
-                var contract = new Contract.Contract
-                {
-                    Table = "t",
-                    Schema = new ContractSchema(),
-                    Columns =
-                    [
-                        new ContractColumn { Canonical = "count", Accepts = ["count"], Type = "BIGINT", Required = true },
-                    ],
-                };
-                var gen = new SqlGenerator(csvPath, "Test", contract, conn);
-
-                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
-                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
-                ExecuteSql(conn, gen.BuildRawLoadSql());
-
-                var validateSql = gen.BuildDataValidationSql();
-                Assert.NotNull(validateSql);
-
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = validateSql;
-                var result = cmd.ExecuteScalar();
-                Assert.NotNull(result);
             }
             finally
             {
@@ -1021,8 +828,8 @@ public class SqlGeneratorTests
                 var statements = gen.CollectStatements();
 
                 // 3 contract schemas + 1 metadata schema + 2 macros + 1 table
-                // + 1 validate_data + 1 view + 1 failed-loads view + 1 table_load = 11
-                Assert.Equal(11, statements.Count);
+                // + 1 view + 1 failed-loads view + 1 table_load = 10
+                Assert.Equal(10, statements.Count);
 
                 Assert.Equal("create_schema", statements[0].Operation);
                 Assert.Equal("bronze_raw", statements[0].ObjectName);
@@ -1048,22 +855,18 @@ public class SqlGeneratorTests
                 Assert.Equal("create_table", statements[6].Operation);
                 Assert.Contains("CREATE OR REPLACE TABLE", statements[6].Sql);
 
-                Assert.Equal("validate_data", statements[7].Operation);
-                Assert.Contains("try_cast", statements[7].Sql);
-                Assert.Contains("DATE", statements[7].Sql);
+                Assert.Equal("create_view", statements[7].Operation);
+                Assert.Contains("CREATE OR REPLACE VIEW", statements[7].Sql);
 
                 Assert.Equal("create_view", statements[8].Operation);
+                Assert.Equal("v_failed_loads", statements[8].ObjectName);
                 Assert.Contains("CREATE OR REPLACE VIEW", statements[8].Sql);
+                Assert.Contains("row_count IS NULL", statements[8].Sql);
 
-                Assert.Equal("create_view", statements[9].Operation);
-                Assert.Equal("v_failed_loads", statements[9].ObjectName);
-                Assert.Contains("CREATE OR REPLACE VIEW", statements[9].Sql);
-                Assert.Contains("row_count IS NULL", statements[9].Sql);
-
-                Assert.Equal("insert_table_load", statements[10].Operation);
-                Assert.Contains("INSERT INTO", statements[10].Sql);
-                Assert.Contains("\"metadata\".\"table_load\"", statements[10].Sql);
-                Assert.Contains("NULL", statements[10].Sql);
+                Assert.Equal("insert_table_load", statements[9].Operation);
+                Assert.Contains("INSERT INTO", statements[9].Sql);
+                Assert.Contains("\"metadata\".\"table_load\"", statements[9].Sql);
+                Assert.Contains("NULL", statements[9].Sql);
             }
             finally
             {
@@ -1084,8 +887,8 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema(),
                     Columns =
                     [
-                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "required_col", Accepts = ["required_col"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Required = true },
+                        new ContractColumn { Canonical = "required_col", Accepts = ["required_col"], Required = true },
                     ],
                 };
 
@@ -1150,8 +953,8 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "expected_pos", Accepts = ["expected_pos"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "name", Accepts = ["name"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "expected_pos", Accepts = ["expected_pos"], Required = true },
+                        new ContractColumn { Canonical = "name", Accepts = ["name"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
@@ -1190,7 +993,7 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "x", Accepts = ["x"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "x", Accepts = ["x"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
@@ -1226,7 +1029,7 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
@@ -1265,7 +1068,7 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Tester", contract, conn);
@@ -1297,7 +1100,7 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "Acme, Inc. & Co.", contract, conn);
@@ -1329,7 +1132,7 @@ public class SqlGeneratorTests
                     Schema = new ContractSchema { Staging = "bronze_raw", Valid = "bronze", Invalid = "bronze_quarantine" },
                     Columns =
                     [
-                        new ContractColumn { Canonical = "id", Accepts = ["id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "id", Accepts = ["id"], Required = true },
                     ],
                 };
                 var gen = new SqlGenerator(csvPath, "O'Brien Data", contract, conn);

@@ -291,15 +291,12 @@ schema:
 columns:
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]
-    type: VARCHAR
     required: true
   - canonical: signup_date
     accepts: [signup_date, sign_up_date, "Signup Date"]
-    type: DATE
     required: true
   - canonical: email
     accepts: [email, Email, email_address]
-    type: VARCHAR
     required: false
 """;
     File.WriteAllText(contractPath, contractContent);

@@ -6,21 +6,16 @@ schema:
 columns:
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]
-    type: VARCHAR
     required: true
   - canonical: signup_date
     accepts: [signup_date, sign_up_date, "Signup Date"]
-    type: DATE
     required: true
   - canonical: email
     accepts: [email, E-mail, email_address]
-    type: VARCHAR
     required: false
   - canonical: count
     accepts: [count, order_count, num_orders]
-    type: BIGINT
     required: false
   - canonical: amount
     accepts: [amount, total, total_amount]
-    type: DECIMAL
     required: false

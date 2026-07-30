@@ -45,19 +45,16 @@ columns:
             var col1 = contract.Columns[0];
             Assert.Equal("customer_id", col1.Canonical);
             Assert.Equal(["customer_id", "cust_id", "Customer ID", "customerid"], col1.Accepts);
-            Assert.Equal("VARCHAR", col1.Type);
             Assert.True(col1.Required);
 
             var col2 = contract.Columns[1];
             Assert.Equal("signup_date", col2.Canonical);
             Assert.Equal(["signup_date", "sign_up_date", "Signup Date"], col2.Accepts);
-            Assert.Equal("DATE", col2.Type);
             Assert.True(col2.Required);
 
             var col3 = contract.Columns[2];
             Assert.Equal("email", col3.Canonical);
             Assert.Equal(["email", "Email", "email_address"], col3.Accepts);
-            Assert.Equal("VARCHAR", col3.Type);
             Assert.False(col3.Required);
         }
         finally

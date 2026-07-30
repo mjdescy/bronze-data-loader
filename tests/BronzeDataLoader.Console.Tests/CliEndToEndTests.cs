@@ -320,11 +320,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: required_col
     accepts: [required_col]
-    type: VARCHAR
     required: true
 """
             : """
@@ -336,11 +334,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: name
     accepts: [name]
-    type: VARCHAR
     required: false
 """;
 

@@ -79,7 +79,7 @@ Only the following data file types are supported. The file extension is used to 
 | `.tsv`    | `read_csv()` with tab delimiter |
 | `.xlsx`   | `read_xlsx()` with header       |
 
-Raw tables are always imported as all varchar columns. The contract defines the canonical column names, the allowed column names, and the data types for each column. The contract also defines which columns are required and which columns are optional. The program will validate the source file against the contract and create a view that conforms to the contract. If the source file does not conform to the contract, a view is created in the `bronze_quarantine` schema with the same name as the raw table.
+Raw tables are always imported as all varchar columns. The contract defines the canonical column names and the allowed column names for each column. The contract also defines which columns are required and which columns are optional. The program will validate the source file against the contract and create a view that conforms to the contract. If the source file does not conform to the contract, a view is created in the `bronze_quarantine` schema with the same name as the raw table.
 
 A contract is defined in a YAML file that looks like this:
 
@@ -92,15 +92,12 @@ schema:
 columns:                     # Column definitions
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]
-    type: VARCHAR
     required: true
   - canonical: signup_date
     accepts: [signup_date, sign_up_date, "Signup Date", "Sign-up Date"]
-    type: DATE
     required: true
   - canonical: email
     accepts: [email, E-mail, email_address]
-    type: VARCHAR
     required: false
 ```
 
@@ -253,7 +250,7 @@ The `metadata_filename` DuckDB macro extracts just the file name from a full fil
 
 **Metadata columns in bronze views:**
 
-When a source file conforms to its contract, the bronze view automatically includes these metadata columns alongside the contract-defined columns, cast to their proper types. This means consumers querying the `bronze` schema can see provenance information without needing to join against metadata tables:
+When a source file conforms to its contract, the bronze view automatically includes these metadata columns alongside the contract-defined columns. This means consumers querying the `bronze` schema can see provenance information without needing to join against metadata tables:
 
 ```sql
 -- Example: bronze view includes both contract and metadata columns

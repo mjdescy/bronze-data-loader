@@ -27,15 +27,12 @@ schema:
 columns:
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]
-    type: VARCHAR
     required: true
   - canonical: signup_date
     accepts: [signup_date, sign_up_date, "Signup Date"]
-    type: DATE
     required: true
   - canonical: email
     accepts: [email, Email, email_address]
-    type: VARCHAR
     required: false
 """);
 
@@ -162,7 +159,7 @@ columns:
                 // Verify bronze view uses canonical column names
                 using (var cmd = appConfig.Connection!.CreateCommand())
                 {
-                    cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email FROM {acmeView1} ORDER BY customer_id";
+                    cmd.CommandText = $"SELECT customer_id, signup_date, email FROM {acmeView1} ORDER BY customer_id";
                     using var reader = cmd.ExecuteReader();
                     Assert.True(reader.Read());
                     Assert.Equal("1", reader.GetString(0));
@@ -198,7 +195,7 @@ columns:
                 using (var combinedCmd = appConfig.Connection!.CreateCommand())
                 {
                     // The combined view should union all per-file views
-                    combinedCmd.CommandText = "SELECT customer_id, signup_date::VARCHAR, email FROM \"bronze\".\"customer\" ORDER BY customer_id";
+                    combinedCmd.CommandText = "SELECT customer_id, signup_date, email FROM \"bronze\".\"customer\" ORDER BY customer_id";
                     using var reader = combinedCmd.ExecuteReader();
 
                     // Should see data from all 3 source files
@@ -239,11 +236,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: name
     accepts: [name]
-    type: VARCHAR
     required: false
 """);
 
@@ -304,11 +299,9 @@ schema:
 columns:
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID"]
-    type: VARCHAR
     required: true
   - canonical: name
     accepts: [name, "Full Name"]
-    type: VARCHAR
     required: false
 """);
 
@@ -365,11 +358,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: required_col
     accepts: [required_col]
-    type: VARCHAR
     required: true
 """);
 
@@ -437,7 +428,6 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
 """);
 
@@ -508,11 +498,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: name
     accepts: [name]
-    type: VARCHAR
     required: false
 """);
 
@@ -649,11 +637,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: VARCHAR
     required: true
   - canonical: required_col
     accepts: [required_col]
-    type: VARCHAR
     required: true
 """);
 
@@ -776,11 +762,9 @@ schema:
 columns:
   - canonical: id
     accepts: [id]
-    type: BIGINT
     required: true
   - canonical: name
     accepts: [name]
-    type: VARCHAR
     required: false
 """);
 
@@ -832,19 +816,19 @@ columns:
                 using var reader = cmd.ExecuteReader();
 
                 Assert.True(reader.Read());
-                Assert.Equal(1, reader.GetInt64(0));
+                Assert.Equal("1", reader.GetString(0));
                 Assert.Equal("Alice", reader.GetString(1));
 
                 Assert.True(reader.Read());
-                Assert.Equal(2, reader.GetInt64(0));
+                Assert.Equal("2", reader.GetString(0));
                 Assert.Equal("Bob", reader.GetString(1));
 
                 Assert.True(reader.Read());
-                Assert.Equal(3, reader.GetInt64(0));
+                Assert.Equal("3", reader.GetString(0));
                 Assert.Equal("Charlie", reader.GetString(1));
 
                 Assert.True(reader.Read());
-                Assert.Equal(4, reader.GetInt64(0));
+                Assert.Equal("4", reader.GetString(0));
                 Assert.Equal("Diana", reader.GetString(1));
 
                 Assert.False(reader.Read());
@@ -856,19 +840,19 @@ columns:
                     using var combinedReader = combinedCmd.ExecuteReader();
 
                     Assert.True(combinedReader.Read());
-                    Assert.Equal(1, combinedReader.GetInt64(0));
+                    Assert.Equal("1", combinedReader.GetString(0));
                     Assert.Equal("Alice", combinedReader.GetString(1));
 
                     Assert.True(combinedReader.Read());
-                    Assert.Equal(2, combinedReader.GetInt64(0));
+                    Assert.Equal("2", combinedReader.GetString(0));
                     Assert.Equal("Bob", combinedReader.GetString(1));
 
                     Assert.True(combinedReader.Read());
-                    Assert.Equal(3, combinedReader.GetInt64(0));
+                    Assert.Equal("3", combinedReader.GetString(0));
                     Assert.Equal("Charlie", combinedReader.GetString(1));
 
                     Assert.True(combinedReader.Read());
-                    Assert.Equal(4, combinedReader.GetInt64(0));
+                    Assert.Equal("4", combinedReader.GetString(0));
                     Assert.Equal("Diana", combinedReader.GetString(1));
 
                     Assert.False(combinedReader.Read());

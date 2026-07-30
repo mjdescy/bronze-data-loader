@@ -511,7 +511,7 @@ columns: []
                     Schema = new ContractSchema(),
                     Columns =
                     [
-                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
                     ],
                 };
 
@@ -563,9 +563,9 @@ columns: []
                     Schema = new ContractSchema(),
                     Columns =
                     [
-                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
-                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
-                        new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = false },
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Required = false },
                     ],
                 };
 
@@ -626,8 +626,8 @@ columns: []
                         Schema = new ContractSchema(),
                         Columns =
                         [
-                            new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
-                            new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
+                            new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
+                            new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
                         ],
                     };
 
@@ -685,10 +685,10 @@ columns: []
                         Schema = new ContractSchema(),
                         Columns =
                         [
-                            new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Type = "VARCHAR", Required = true },
-                            new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Type = "DATE", Required = true },
-                            new ContractColumn { Canonical = "email", Accepts = ["email"], Type = "VARCHAR", Required = true },
-                            new ContractColumn { Canonical = "missing_required", Accepts = ["missing_required"], Type = "VARCHAR", Required = true },
+                            new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
+                            new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                            new ContractColumn { Canonical = "email", Accepts = ["email"], Required = true },
+                            new ContractColumn { Canonical = "missing_required", Accepts = ["missing_required"], Required = true },
                         ],
                     };
 
