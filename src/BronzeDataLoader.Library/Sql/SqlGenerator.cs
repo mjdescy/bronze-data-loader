@@ -255,7 +255,7 @@ public class SqlGenerator(
 
     /// <summary>
     /// Build SQL to load data from the source file into a raw table.
-    /// Prepends metadata columns (row_number, file_name, submitter) before the source data columns.
+    /// Prepends metadata columns (row_number, file_name, submitter, loaded_at) before the source data columns.
     /// </summary>
     public string BuildRawLoadSql()
     {
@@ -269,6 +269,7 @@ public class SqlGenerator(
                $"  row_number() OVER () AS metadata_row_number,\n" +
                $"  metadata_filename('{safePath}') AS metadata_file_name,\n" +
                $"  '{safeSubmitter}' AS metadata_submitter,\n" +
+               $"  CURRENT_TIMESTAMP AS metadata_loaded_at,\n" +
                $"  *\n" +
                $"FROM {readFunc};";
     }

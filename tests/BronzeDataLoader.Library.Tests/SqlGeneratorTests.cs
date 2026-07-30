@@ -327,6 +327,7 @@ public class SqlGeneratorTests
                 Assert.Contains("metadata_row_number", sql);
                 Assert.Contains("metadata_file_name", sql);
                 Assert.Contains("metadata_submitter", sql);
+                Assert.Contains("metadata_loaded_at", sql);
                 Assert.EndsWith(";", sql.Trim());
             }
             finally
@@ -355,6 +356,7 @@ public class SqlGeneratorTests
                 Assert.Contains("metadata_row_number", cols);
                 Assert.Contains("metadata_file_name", cols);
                 Assert.Contains("metadata_submitter", cols);
+                Assert.Contains("metadata_loaded_at", cols);
             }
             finally
             {
@@ -603,7 +605,7 @@ public class SqlGeneratorTests
 
                 // Query the view (cast DATE to VARCHAR for locale-independent comparison)
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email, metadata_row_number, metadata_file_name, metadata_submitter FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
+                cmd.CommandText = $"SELECT customer_id, signup_date::VARCHAR, email, metadata_row_number, metadata_file_name, metadata_submitter, metadata_loaded_at FROM {SqlGenerator.QuoteQualified(gen.FullTableName)}";
                 using var reader = cmd.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("42", reader.GetString(0));
@@ -612,6 +614,7 @@ public class SqlGeneratorTests
                 Assert.Equal(1, reader.GetInt64(3)); // metadata_row_number
                 Assert.Equal(Path.GetFileName(csvPath), reader.GetString(4)); // metadata_file_name
                 Assert.Equal("Acme", reader.GetString(5)); // metadata_submitter
+                Assert.NotNull(reader.GetValue(6)); // metadata_loaded_at should be a non-null timestamp
             }
             finally
             {

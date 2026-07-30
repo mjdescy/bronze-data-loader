@@ -227,13 +227,14 @@ Records each raw table import, one row per source file. A row is inserted **befo
 
 ### Metadata Columns in Loaded Tables
 
-Every raw table created in the `bronze_raw` schema includes three metadata columns that are prepended before the source data columns during import. These columns make each row self-describing and provide lineage information that flows through to the bronze and bronze_quarantine views.
+Every raw table created in the `bronze_raw` schema includes four metadata columns that are prepended before the source data columns during import. These columns make each row self-describing and provide lineage information that flows through to the bronze and bronze_quarantine views.
 
 | Column                  | Type      | Description                                                                                  |
 | ----------------------- | --------- | -------------------------------------------------------------------------------------------- |
 | `metadata_row_number`   | `BIGINT`  | Row position within the source file, starting at 1 for the first data row. Assigned via `ROW_NUMBER() OVER ()` during import, so it reflects the source file's row order. |
 | `metadata_file_name`    | `VARCHAR` | The source file name only (extracted from the full path using a DuckDB macro). Does not include directory components. |
 | `metadata_submitter`    | `VARCHAR` | The submitter/owner name from the manifest. Preserved as a column rather than relying on the table name, so it survives joins and downstream processing. |
+| `metadata_loaded_at`    | `TIMESTAMP` | Timestamp when the row was loaded into the raw table. Defaults to `CURRENT_TIMESTAMP`.       |
 
 **How the metadata columns are populated:**
 
@@ -243,6 +244,7 @@ SELECT
   row_number() OVER ()               AS metadata_row_number,
   metadata_filename('<file_path>')   AS metadata_file_name,
   '<submitter>'                      AS metadata_submitter,
+  CURRENT_TIMESTAMP                  AS metadata_loaded_at,
   *
 FROM read_csv('<file_path>', header=true, all_varchar=true);
 ```
@@ -263,7 +265,7 @@ FROM bronze.customer_Acme_abc12345;
 
 The `bronze_quarantine` view uses `SELECT * FROM bronze_raw.<table>`, so metadata columns are included automatically when a file fails contract validation. This aids debugging by showing which rows came from which file and their original positions.
 
-**No special handling needed for queries —** the `metadata_` prefix clearly separates operational metadata from business data. Use `SELECT * EXCLUDE (metadata_row_number, metadata_file_name, metadata_submitter)` to retrieve only the source data columns.
+**No special handling needed for queries —** the `metadata_` prefix clearly separates operational metadata from business data. Use `SELECT * EXCLUDE (metadata_row_number, metadata_file_name, metadata_submitter, metadata_loaded_at)` to retrieve only the source data columns.
 
 ### `metadata.quarantine`
 
