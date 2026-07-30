@@ -70,6 +70,12 @@ public record SourceFile
 
         try
         {
+            if (rowCount == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Source file '{FilePath}' loaded zero records. Manual inspection required.");
+            }
+
             var (viewSql, warnings) = sqlGenerator.BuildBronzeViewSql();
             ExecuteNonQuery(connection, viewSql);
 

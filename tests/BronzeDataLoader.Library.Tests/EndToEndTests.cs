@@ -481,6 +481,75 @@ columns:
     }
 
     [Fact]
+    public void FullPipeline_ZeroRecords_Quarantines()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: t
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    required: true
+""");
+
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            // CSV with header only — zero data rows
+            File.WriteAllText(Path.Combine(dataDir, "empty.csv"), "id\n");
+
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,empty.csv,c.yaml\n");
+
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
+
+            var appConfig = AppConfig.FromYaml(configPath);
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+
+                foreach (var sf in sourceFiles)
+                    sf.GenerateAndExecuteSql(appConfig);
+
+                // Raw table should exist (even with 0 rows)
+                var rawTables = GetTableNames(appConfig.Connection!, "bronze_raw");
+                Assert.NotEmpty(rawTables);
+
+                // Bronze view should NOT exist
+                var bronzeViews = GetTableNames(appConfig.Connection!, "bronze");
+                Assert.Empty(bronzeViews);
+
+                // Quarantine view should exist
+                var quarantineViews = GetTableNames(appConfig.Connection!, "bronze_quarantine");
+                Assert.Single(quarantineViews);
+
+                // Quarantine log should mention zero records
+                using var cmd = appConfig.Connection!.CreateCommand();
+                cmd.CommandText = "SELECT error_message FROM metadata.quarantine";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Contains("zero records", reader.GetString(0), StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("manual inspection", reader.GetString(0), StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FullPipeline_SpecialCharactersInSubmitter_SanitizesCorrectly()
     {
         var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
