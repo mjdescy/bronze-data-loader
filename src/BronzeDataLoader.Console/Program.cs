@@ -241,6 +241,63 @@ static int RunLoad(LoadOptions opts)
                 Output.WriteLine(opts, $"Generated {allStatements.Count} SQL files in {outputFolder}");
             }
 
+            // === Summary: query quarantine and failed-load information ===
+            var quarantineCount = 0;
+            var quarantineDetails = new List<(string Table, string Error)>();
+            var failedLoadCount = 0;
+            var failedLoadTables = new List<string>();
+
+            if (opts.GenerateSql)
+            {
+                // In generate mode, count quarantine operations from collected statements
+                var quarantineOps = allStatements
+                    .Where(s => s.Operation == "create_quarantine_view")
+                    .Select(s => s.ObjectName)
+                    .ToList();
+                quarantineCount = quarantineOps.Count;
+                quarantineDetails = quarantineOps.Select(n => (n, "Quarantined in generated SQL")).ToList();
+                // Failed loads cannot be detected in generate mode (no execution)
+            }
+            else
+            {
+                // In execute mode, query metadata tables directly
+                using (var cmd = appConfig.Connection!.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT table_name, error_message FROM \"metadata\".\"quarantine\" ORDER BY table_name";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        quarantineDetails.Add((reader.GetString(0), reader.GetString(1)));
+                        quarantineCount++;
+                    }
+                }
+
+                using (var cmd = appConfig.Connection!.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT table_name FROM \"metadata\".\"v_failed_loads\" ORDER BY table_name";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        failedLoadTables.Add(reader.GetString(0));
+                        failedLoadCount++;
+                    }
+                }
+            }
+
+            // Print summary to stdout
+            Output.WriteLine(opts, "");
+            Output.WriteLine(opts, $"Results: {sourceFiles.Count} files, {processedCount} processed, {quarantineCount} quarantined, {failedLoadCount} failed");
+
+            foreach (var (table, error) in quarantineDetails)
+            {
+                Output.WriteLine(opts, $"  Quarantined: {table} — {error}");
+            }
+
+            foreach (var table in failedLoadTables)
+            {
+                Output.WriteLine(opts, $"  Failed: {table}");
+            }
+
             Output.WriteJson(opts, new
             {
                 command = "load",
@@ -248,6 +305,10 @@ static int RunLoad(LoadOptions opts)
                 total_files = sourceFiles.Count,
                 processed = processedCount,
                 errors = errorCount,
+                quarantined = quarantineCount,
+                quarantine_details = quarantineDetails.Select(q => new { table = q.Table, error = q.Error }),
+                failed_loads = failedLoadCount,
+                failed_load_tables = failedLoadTables,
                 generate_sql = opts.GenerateSql,
                 sql_files_generated = sqlFileCount,
             });

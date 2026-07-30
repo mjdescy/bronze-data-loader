@@ -162,6 +162,8 @@ public class CliEndToEndTests
             Assert.DoesNotContain("Error", stdOut);
             Assert.DoesNotContain("Quarantined", stdOut);
             Assert.DoesNotContain("Error processing", stdOut);
+            Assert.Contains("Results:", stdOut);
+            Assert.Contains("0 quarantined, 0 failed", stdOut);
         }
         finally
         {
@@ -179,10 +181,13 @@ public class CliEndToEndTests
             var (exitCode, stdOut, stdErr) = RunConsole($"load \"{configPath}\"");
 
             Assert.Equal(0, exitCode);
-            // Quarantine notifications go to stderr (diagnostics channel)
+            // Per-file quarantine notifications go to stderr
             Assert.Contains("Quarantined", stdErr);
-            // No error-level output should appear in stdout
-            Assert.DoesNotContain("Quarantined", stdOut);
+            // Summary with quarantine details appears in stdout
+            Assert.Contains("Results:", stdOut);
+            Assert.Contains("1 quarantined", stdOut);
+            Assert.Contains("0 failed", stdOut);
+            Assert.Contains("Quarantined: bronze_raw.", stdOut);
         }
         finally
         {
@@ -203,6 +208,8 @@ public class CliEndToEndTests
 
             Assert.Equal(0, exitCode);
             Assert.Contains("SQL files", stdOut);
+            Assert.Contains("Results:", stdOut);
+            Assert.Contains("0 quarantined", stdOut);
 
             var outputDir = Path.Combine(dir, "output");
             Assert.True(Directory.Exists(outputDir));
@@ -272,6 +279,48 @@ public class CliEndToEndTests
     }
 
     // ===== Error handling =====
+
+    [Fact]
+    public void Load_JsonOutput_IncludesSummaryFields()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var configPath = SetupFullPipeline(dir, missingRequiredCol: false);
+            var (exitCode, stdOut, _) = RunConsole($"load \"{configPath}\" --json");
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("\"quarantined\": 0", stdOut);
+            Assert.Contains("\"failed_loads\": 0", stdOut);
+            Assert.Contains("\"processed\":", stdOut);
+            Assert.Contains("\"total_files\":", stdOut);
+        }
+        finally
+        {
+            CleanupDir(dir);
+        }
+    }
+
+    [Fact]
+    public void Load_ZeroRecords_Quarantines()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var configPath = SetupEmptyFile(dir);
+            var (exitCode, stdOut, stdErr) = RunConsole($"load \"{configPath}\"");
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("Quarantined", stdErr);
+            Assert.Contains("Results:", stdOut);
+            Assert.Contains("1 quarantined", stdOut);
+            Assert.Contains("zero records", stdErr, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CleanupDir(dir);
+        }
+    }
 
     [Fact]
     public void Load_MissingConfigFile_ReturnsError()
@@ -356,6 +405,48 @@ columns:
         File.WriteAllText(Path.Combine(rootDir, "manifest.csv"),
             "submitter,source_folder,file_pattern,contract\n" +
             "Test,data,*.csv,customer_table.yaml\n");
+
+        return configPath;
+    }
+
+    /// <summary>
+    /// Create a temp directory with config, contract, manifest, and an empty CSV
+    /// (header only, zero data rows) for testing zero-record quarantine.
+    /// </summary>
+    private static string SetupEmptyFile(string rootDir)
+    {
+        var configPath = Path.Combine(rootDir, "config.yaml");
+        var outputDir = Path.Combine(rootDir, "output");
+        Directory.CreateDirectory(outputDir);
+
+        File.WriteAllText(configPath, $"""
+manifest_path: '{rootDir}/manifest.csv'
+data_folder: '{rootDir}'
+contracts_folder: '{rootDir}'
+output_folder: '{outputDir}'
+database_name: ':memory:'
+""");
+
+        File.WriteAllText(Path.Combine(rootDir, "customer_table.yaml"), """
+table: customer
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+columns:
+  - canonical: id
+    accepts: [id]
+    required: true
+""");
+
+        var dataDir = Path.Combine(rootDir, "data");
+        Directory.CreateDirectory(dataDir);
+        // CSV with header only — zero data rows
+        File.WriteAllText(Path.Combine(dataDir, "empty.csv"), "id\n");
+
+        File.WriteAllText(Path.Combine(rootDir, "manifest.csv"),
+            "submitter,source_folder,file_pattern,contract\n" +
+            "Test,data,empty.csv,customer_table.yaml\n");
 
         return configPath;
     }
