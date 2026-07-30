@@ -287,6 +287,9 @@ schema:
   staging: bronze_raw
   valid: bronze
   invalid: bronze_quarantine
+# Allow columns in the source file that are not defined in the contract.
+# When false, unexpected columns cause the file to be quarantined.
+allow_additional_columns: true
 # Column definitions
 columns:
   - canonical: customer_id

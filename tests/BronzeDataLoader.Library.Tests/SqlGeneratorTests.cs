@@ -476,6 +476,40 @@ public class SqlGeneratorTests
         }
 
         [Fact]
+        public void ExtraColumns_Disallowed_ThrowsInvalidOperationException()
+        {
+            using var conn = CreateInMemoryConnection();
+            var csvPath = CreateTempCsv("customer_id,signup_date,email,extra_col\n1,2024-01-01,a@b.com,extra\n");
+            try
+            {
+                var contract = new Contract.Contract
+                {
+                    Table = "customer",
+                    Schema = new ContractSchema(),
+                    Columns =
+                    [
+                        new ContractColumn { Canonical = "customer_id", Accepts = ["customer_id"], Required = true },
+                        new ContractColumn { Canonical = "signup_date", Accepts = ["signup_date"], Required = true },
+                        new ContractColumn { Canonical = "email", Accepts = ["email"], Required = false },
+                    ],
+                    AllowAdditionalColumns = false,
+                };
+                var gen = new SqlGenerator(csvPath, "Acme", contract, conn);
+                ExecuteSql(conn, SqlGenerator.BuildCreateMacroSql());
+                ExecuteSql(conn, gen.BuildCreateSchemaIfNotExists());
+                ExecuteSql(conn, gen.BuildRawLoadSql());
+
+                var ex = Assert.Throws<InvalidOperationException>(() => gen.BuildSelect());
+                Assert.Contains("extra_col", ex.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("allow_additional_columns", ex.Message);
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        [Fact]
         public void CaseInsensitiveColumnMatching_Works()
         {
             using var conn = CreateInMemoryConnection();

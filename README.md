@@ -81,6 +81,8 @@ Only the following data file types are supported. The file extension is used to 
 
 Raw tables are always imported as all varchar columns. The contract defines the canonical column names and the allowed column names for each column. The contract also defines which columns are required and which columns are optional. The program will validate the source file against the contract and create a view that conforms to the contract. If the source file does not conform to the contract, a view is created in the `bronze_quarantine` schema with the same name as the raw table.
 
+By default, columns in the source file that are not in the contract are allowed and produce a warning. Set `allow_additional_columns: false` in the contract to quarantine files that contain unexpected columns.
+
 A contract is defined in a YAML file that looks like this:
 
 ```yaml
@@ -89,6 +91,9 @@ schema:
   staging: bronze_raw        # Schema for all source tables to be loaded to
   valid: bronze              # Schema for views that conform to the contract
   invalid: bronze_quarantine # Schema for views that do not conform to the contract
+# Allow columns in the source file that are not defined in the contract.
+# When false, unexpected columns cause the file to be quarantined.
+allow_additional_columns: true
 columns:                     # Column definitions
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]

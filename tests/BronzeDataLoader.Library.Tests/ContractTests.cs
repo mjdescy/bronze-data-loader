@@ -88,6 +88,43 @@ columns:
             Assert.Equal("custom_valid", contract.Schema.Valid);
             Assert.Equal("custom_quarantine", contract.Schema.Invalid);
             Assert.Empty(contract.Columns);
+            Assert.True(contract.AllowAdditionalColumns);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AllowAdditionalColumns_DefaultTrue()
+    {
+        var yaml = "table: t\nschema:\n  staging: bronze_raw\n  valid: bronze\n  invalid: bronze_quarantine\ncolumns: []";
+
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, yaml);
+            var contract = Contract.Contract.FromYaml(path);
+            Assert.True(contract.AllowAdditionalColumns);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AllowAdditionalColumns_FalseFromYaml()
+    {
+        var yaml = "table: t\nschema:\n  staging: bronze_raw\n  valid: bronze\n  invalid: bronze_quarantine\nallow_additional_columns: false\ncolumns: []";
+
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, yaml);
+            var contract = Contract.Contract.FromYaml(path);
+            Assert.False(contract.AllowAdditionalColumns);
         }
         finally
         {

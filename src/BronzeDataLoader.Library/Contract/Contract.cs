@@ -18,6 +18,13 @@ public record Contract
     public List<ContractColumn> Columns { get; init; } = [];
 
     /// <summary>
+    /// When true (default), columns in the source file that are not in the contract
+    /// are ignored with a warning. When false, unexpected columns cause the file
+    /// to be quarantined.
+    /// </summary>
+    public bool AllowAdditionalColumns { get; init; } = true;
+
+    /// <summary>
     /// Load a contract from a YAML file and return a <see cref="Contract"/> object.
     /// </summary>
     /// <param name="path">Path to the contract YAML file.</param>

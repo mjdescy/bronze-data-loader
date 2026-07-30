@@ -411,6 +411,76 @@ columns:
     }
 
     [Fact]
+    public void FullPipeline_DisallowedExtraColumns_Quarantines()
+    {
+        var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(testDir);
+
+            var contractPath = Path.Combine(testDir, "c.yaml");
+            File.WriteAllText(contractPath, """
+table: t
+schema:
+  staging: bronze_raw
+  valid: bronze
+  invalid: bronze_quarantine
+allow_additional_columns: false
+columns:
+  - canonical: id
+    accepts: [id]
+    required: true
+""");
+
+            var dataDir = Path.Combine(testDir, "data");
+            Directory.CreateDirectory(dataDir);
+            // Source file has an extra column 'name' not in the contract
+            File.WriteAllText(Path.Combine(dataDir, "test.csv"), "id,name\n1,Alice\n");
+
+            var manifestPath = Path.Combine(testDir, "manifest.csv");
+            File.WriteAllText(manifestPath, "submitter,source_folder,file_pattern,contract\nTest,data,test.csv,c.yaml\n");
+
+            var configPath = Path.Combine(testDir, "config.yaml");
+            File.WriteAllText(configPath, $"manifest_path: '{manifestPath}'\ndata_folder: '{testDir}'\ncontracts_folder: '{testDir}'\noutput_folder: '{testDir}'\ndatabase_name: ':memory:'\n");
+
+            var appConfig = AppConfig.FromYaml(configPath);
+            using (appConfig.Connection!)
+            {
+                var manifest = Manifest.FromCsv(manifestPath);
+                var sourceFiles = manifest.ToSourceFileList(appConfig);
+
+                foreach (var sf in sourceFiles)
+                    sf.GenerateAndExecuteSql(appConfig);
+
+                // Raw table should exist
+                var rawTables = GetTableNames(appConfig.Connection!, "bronze_raw");
+                Assert.NotEmpty(rawTables);
+
+                // Bronze view should NOT exist (extra columns disallowed)
+                var bronzeViews = GetTableNames(appConfig.Connection!, "bronze");
+                Assert.Empty(bronzeViews);
+
+                // Quarantine view should exist in bronze_quarantine
+                var quarantineViews = GetTableNames(appConfig.Connection!, "bronze_quarantine");
+                Assert.Single(quarantineViews);
+
+                // Quarantine log should have entry about unexpected columns
+                using var cmd = appConfig.Connection!.CreateCommand();
+                cmd.CommandText = "SELECT error_message FROM metadata.quarantine";
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Contains("unexpected columns", reader.GetString(0), StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("name", reader.GetString(0), StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testDir))
+                Directory.Delete(testDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FullPipeline_SpecialCharactersInSubmitter_SanitizesCorrectly()
     {
         var testDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());

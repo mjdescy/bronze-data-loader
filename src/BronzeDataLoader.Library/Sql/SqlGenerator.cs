@@ -336,7 +336,16 @@ public class SqlGenerator(
 
         if (extraColumnNames.Length > 0)
         {
-            warnings.Add($"Ignoring unexpected columns: [{string.Join(", ", extraColumnNames)}]");
+            if (Contract.AllowAdditionalColumns)
+            {
+                warnings.Add($"Ignoring unexpected columns: [{string.Join(", ", extraColumnNames)}]");
+            }
+            else
+            {
+                errors.Add(
+                    $"Unexpected columns not allowed by contract: [{string.Join(", ", extraColumnNames)}]. " +
+                    "Set allow_additional_columns: true in the contract to permit them.");
+            }
         }
 
         if (errors.Count > 0)
@@ -363,6 +372,8 @@ public class SqlGenerator(
 
     /// <summary>
     /// Build a CREATE OR REPLACE VIEW statement that maps raw columns to canonical names.
+    /// Throws <see cref="InvalidOperationException"/> if required columns are missing
+    /// or if <see cref="Contract.AllowAdditionalColumns"/> is false and unexpected columns exist.
     /// </summary>
     /// <returns>A tuple of the view SQL and any warnings.</returns>
     public (string Sql, string[] Warnings) BuildBronzeViewSql()

@@ -3,6 +3,7 @@ schema:
   staging: bronze_raw
   valid: bronze
   invalid: bronze_quarantine
+allow_additional_columns: true
 columns:
   - canonical: customer_id
     accepts: [customer_id, cust_id, "Customer ID", customerid]
